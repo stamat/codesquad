@@ -50,35 +50,45 @@ def run(
     max_cost: float = typer.Option(1.0, "--max-cost", help="USD circuit breaker"),
     config: Path = CONFIG_OPT,
     override: str = OVERRIDE_OPT,
-    role: str = typer.Option("coder", "--role", help="Role to run (single-agent until Phase 4 graph)"),
+    role: str = typer.Option(None, "--role", help="Run a single role instead of the full squad"),
     auto: bool = typer.Option(False, "--auto", help="Unattended: never prompts. Confirm-gated shell commands are DECLINED (not approved); at run end push + PR happen automatically (Phase 5)."),
 ) -> None:
-    """Run a squad on a task."""
+    """Run a squad on a task (supervisor graph; --role for a lone agent)."""
     from squad.agents import build_agent  # lazy: heavy imports
+    from squad.graph import BudgetExceeded, build_squad
     from squad.interceptor import RunLog, current_role, install
 
     _apply_override(override)
     cfg = _load(config)
-    if role not in cfg.roles:
+    if role and role not in cfg.roles:
         typer.secho(f"unknown role {role!r}; have: {', '.join(cfg.roles)}", fg="red", err=True)
         raise typer.Exit(1)
     log = RunLog.start(LOGS_DIR)
     install()
-    current_role.set(role)
+    entry = role or "supervisor"
+    current_role.set(entry)
     log.write("handoff", direction="in", payload={"task": task})
-    # ponytail: single agent, cwd-jailed. Phase 4 adds the supervisor graph; Phase 5 the worktree jail.
+    # ponytail: cwd-jailed until Phase 5 gives each run its own worktree.
     jail = (repo or Path.cwd()).resolve()
     # auto mode declines rather than approves: unattended runs must not self-authorize sudo/rm/pushes
     confirm = (lambda c: False) if auto else (lambda c: typer.confirm(f"allow shell command? {c}"))
-    agent = build_agent(cfg, role, jail, confirm=confirm)
-    result = agent.invoke(
-        {"messages": [{"role": "user", "content": task}]},
-        config={"recursion_limit": 2 * cfg.roles[role].max_turns},
-    )
-    answer = result["messages"][-1].content
+    agent = (build_agent(cfg, role, jail, confirm) if role
+             else build_squad(cfg, jail, confirm, max_cost))
+    try:
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": task}]},
+            config={"recursion_limit": 2 * cfg.roles[entry].max_turns},
+        )
+        answer = result["messages"][-1].content
+    except BudgetExceeded as e:
+        answer = f"HALTED: {e}"
+        typer.secho(answer, fg="red", err=True)
     log.write("handoff", direction="out", payload={"result": answer})
-    typer.echo(answer)
-    typer.secho(f"\nrun {log.run_id} — log: {log.path}", fg="cyan")
+    if not answer.startswith("HALTED"):
+        typer.echo(answer)
+    typer.secho(f"\nrun {log.run_id} — cost ${log.total_cost:.4f} — log: {log.path}", fg="cyan")
+    if answer.startswith("HALTED"):
+        raise typer.Exit(3)
 
 
 @app.command()

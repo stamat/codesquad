@@ -37,6 +37,7 @@ current_role: _Slot = _Slot("?")
 class RunLog:
     run_id: str
     path: Path
+    total_cost: float = 0.0  # running sum, feeds the --max-cost breaker
 
     @classmethod
     def start(cls, logs_dir: Path, run_id: str | None = None) -> "RunLog":
@@ -59,6 +60,7 @@ class RunLog:
             "tokens": tokens,
             "cost_usd": cost_usd,
         }
+        self.total_cost += cost_usd or 0.0
         with self.path.open("a") as f:
             f.write(json.dumps(rec, default=str) + "\n")
 

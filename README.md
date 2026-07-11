@@ -7,8 +7,9 @@ safety gate. Multiple squads can work the same repo concurrently via git
 worktrees.
 
 **Status: pre-alpha, built phase by phase.** Done: config, model router,
-gated shell, single-agent runs, interception log with per-role token/cost
-accounting. Not yet: multi-agent graph, worktrees, browsing, compression.
+gated shell, interception log with per-role token/cost accounting, and the
+supervisor graph — multi-agent relay with logged handoffs and a cost circuit
+breaker. Not yet: worktrees + PR step, browsing, compression.
 See [PLAN.md](PLAN.md) for the roadmap and [DECISIONS.md](DECISIONS.md) for
 why things are the way they are.
 
@@ -57,10 +58,17 @@ LiteLLM model string — dev/testing shim, never production.
 ## Use
 
 ```bash
-# run a task (single coder agent for now; supervisor graph lands in Phase 4)
-uv run squad run "create hello.py that prints hi, then run it"
+# run a task with the full squad: supervisor delegates to planner/scout/coder/reviewer,
+# every handoff is intercepted and logged
+uv run squad run "add input validation to parse_user()"
 
-# run against another repo / as another role
+# circuit breaker: halt the run when total model spend crosses the cap
+uv run squad run --max-cost 0.50 "refactor the config loader"
+
+# single role, no supervisor — cheaper for simple jobs
+uv run squad run --role coder "create hello.py that prints hi, then run it"
+
+# another repo
 uv run squad run --repo ~/code/myproject --role reviewer "assess test coverage"
 
 # unattended: never prompts. Dangerous shell commands are DECLINED (not approved);

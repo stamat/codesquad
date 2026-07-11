@@ -14,6 +14,15 @@ a few lines: **what** we decided, **why**, and what we rejected.
 - **Focus before features.** New ideas go into PLAN.md or this file, not into
   the current phase's scope.
 
+## 2026-07-12 — Handoffs go through our `delegate` tool, not deepagents subagents
+
+deepagents has built-in subagent delegation, but our own `delegate` tool is
+the single interception point: it logs task+context in / result out, sets
+role attribution for cost accounting, and enforces the `--max-cost` breaker
+*before* each handoff. Cost ceiling within one delegation is bounded by the
+role's `max_turns` recursion limit, not per-call — revisit if a single
+delegation ever overspends.
+
 ## 2026-07-12 — Issue tracking (GitHub/Linear) is config, not code
 
 Reading GitHub/Linear issues = their official MCP servers in `mcp_servers`,
