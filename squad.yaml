@@ -1,0 +1,61 @@
+# squad configuration — roles, models, rules, git, MCP servers.
+# This file is the whole product surface: edit it, own it.
+
+roles:
+  supervisor:
+    model: gemini/gemini-3-flash        # cheap-mid; it only routes & decides
+    prompt: prompts/supervisor.md
+    tools: []                           # delegates only, no direct tools
+
+  planner:
+    model: anthropic/claude-opus-4-8    # runs once per task; strong model justified
+    prompt: prompts/planner.md
+    tools: [fs_read]                    # reads the repo to plan. Never edits.
+    max_context: 100000
+
+  scout:
+    model: gemini/gemini-3.1-flash-lite
+    prompt: prompts/scout.md
+    tools: [browse]                     # NO shell. NO fs write.
+    max_context: 60000
+
+  coder:
+    model: gemini/gemini-3-pro
+    prompt: prompts/coder.md
+    tools: [shell, fs, git_commit]
+    max_context: 120000
+
+  reviewer:
+    model: anthropic/claude-opus-4-8
+    prompt: prompts/reviewer.md
+    tools: [fs_read]                    # read-only. Reviews, never edits.
+    max_context: 100000
+
+compressor:
+  model: ollama/qwen3:8b                # local, free, private
+  trigger_tokens: 50000
+  keep_last_messages: 6
+
+git:
+  worktrees_dir: ~/.squad/worktrees
+  branch_prefix: squad/
+  commit_roles: [coder]
+  push: confirm                         # push NEVER happens without a human yes
+
+shell_rules:
+  confirm_patterns:                     # pause and ask the human
+    - '\brm\s+(-\w*[rf]\w*\s+)'
+    - '\bsudo\b'
+    - 'git\s+push\b'
+    - 'curl[^|]*\|\s*(ba)?sh'
+    - '\bchmod\s+777\b'
+  deny_patterns:                        # refuse outright, log, tell the agent why
+    - 'rm\s+-rf\s+[/~]\s*$'
+    - ':\(\)\s*\{.*\};:'
+    - 'git\s+worktree\s+remove'
+  timeout_seconds: 120
+  max_output_bytes: 100000
+
+# MCP servers become tool names bindable in roles[].tools
+# (Playwright wiring lands in Phase 6; "browse" is built-in and maps to it.)
+mcp_servers: {}
