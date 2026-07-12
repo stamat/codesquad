@@ -65,6 +65,18 @@ def test_scout_gets_profile_others_do_not(cfg, tmp_path):
     assert "profile" not in bound_tools(build_agent(cfg, "coder", tmp_path, lambda c: False))
 
 
+def test_history_middleware_wires_max_context_and_keep(cfg):
+    # the dead knobs live: max_context triggers history summarization by the
+    # local compressor model; keep_last_messages is the untouched tail
+    from squad.agents import history_middleware
+
+    (mw,) = history_middleware(cfg, "coder")
+    assert mw.trigger == ("tokens", cfg.roles["coder"].max_context)
+    assert mw.keep == ("messages", cfg.compressor.keep_last_messages)
+    assert mw.model.model == cfg.compressor.model         # local, free
+    assert mw.model.squad_role == "compressor"            # spend attributed right
+
+
 def test_fs_read_roles_get_write_deny_permission():
     # read-only is enforced, not asked: fs_read without fs denies every write path
     (rule,) = fs_permissions(["fs_read"])

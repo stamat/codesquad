@@ -20,6 +20,28 @@ _NAMED_TOOLS = {"set_subtasks": set_subtasks, "next_subtask": next_subtask,
                 "complete_subtask": complete_subtask, "save_doc": save_doc}
 
 
+def history_middleware(cfg: SquadConfig, role: str) -> list:
+    """Wires max_context: when a role's live message history crosses it, older
+    messages are summarized by the local compressor model (free, private) and
+    the last keep_last_messages stay verbatim. AI/tool-call pairs are kept
+    together by the middleware. This is what stops supervisor history from
+    growing O(N²) across delegations."""
+    from langchain.agents.middleware import SummarizationMiddleware  # lazy: heavy
+
+    from squad.interceptor import LoggedChat
+
+    class SquadHistoryCompressor(SummarizationMiddleware):
+        """Distinct name so it coexists with deepagents' built-in summarizer,
+        which triggers at a fraction of the model's full window (~850k on 1M
+        models) — far past our budgets. Ours fires at the role's max_context."""
+
+    return [SquadHistoryCompressor(
+        model=LoggedChat(model=cfg.compressor.model, squad_role="compressor"),
+        trigger=("tokens", cfg.roles[role].max_context),
+        keep=("messages", cfg.compressor.keep_last_messages),
+    )]
+
+
 def fs_permissions(role_tools: list[str]) -> list[FilesystemPermission] | None:
     """fs_read without fs = read-only, enforced: writes denied on every path.
     Prompt says "never edits"; this makes it physics, not a request."""
@@ -82,4 +104,5 @@ def build_agent(cfg: SquadConfig, role: str, jail: Path, confirm: Callable[[str]
         system_prompt=load_prompt(r.prompt),
         backend=backend,
         permissions=fs_permissions(r.tools),
+        middleware=history_middleware(cfg, role),
     )

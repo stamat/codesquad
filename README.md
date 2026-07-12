@@ -17,7 +17,10 @@ and the run's report is posted back on the issue), run documents
 the PR notes become the pull request body), and local-model
 compression at handoff boundaries (oversized context is digested by Ollama
 before crossing between agents, chunked to fit the local model's window — a
-live check shrank 449 tokens to 96 with every fact intact).
+live check shrank 449 tokens to 96 with every fact intact), and in-loop
+history compression (each role's live message list is summarized by the local
+model when it crosses the role's `max_context`; the last `keep_last_messages`
+stay verbatim).
 All planned v1 phases are built; see [PLAN.md](PLAN.md) and
 [DECISIONS.md](DECISIONS.md) for why things are the way they are.
 
@@ -154,7 +157,7 @@ roles:                  # a role = model + prompt + tools. Add a block = add a r
     model: gemini/gemini-3-pro   # any LiteLLM model string; swap providers by editing this line
     prompt: prompts/coder.md     # the role's specialization, relative to this file
     tools: [shell, fs, git_commit]  # capability boundary: unlisted tool = never bound = uncallable
-    max_context: 120000          # compression kicks in above this (Phase 7)
+    max_context: 120000          # live history above this is summarized by the local compressor
     max_turns: 20                # per-delegation loop cap
 
 compressor:             # local model that squeezes context between agent handoffs

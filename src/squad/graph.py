@@ -8,7 +8,7 @@ from typing import Callable
 from deepagents import create_deep_agent
 from langchain_core.tools import tool
 
-from squad.agents import build_agent
+from squad.agents import build_agent, history_middleware
 from squad.config import SquadConfig
 from squad.interceptor import current_log, current_role
 from squad.router import chat_model
@@ -32,9 +32,8 @@ def build_delegate(subagents: dict, cfg: SquadConfig, max_cost: float):
             return f"unknown role {role!r}; available: {', '.join(subagents)}"
         from squad.compress import compress  # lazy: avoids import cycle at module load
 
-        # compression checkpoint: both directions of the boundary
-        # ponytail: keep_last_messages unused — we compress handoff strings, not
-        # message lists; wire it if supervisor history itself ever needs digesting.
+        # compression checkpoint: both directions of the boundary (live message
+        # lists are handled separately by history_middleware at max_context)
         context = compress(context, cfg.compressor)
         log = current_log.get()
         if log and max_cost > 0 and log.total_cost >= max_cost:  # max_cost <= 0 disables the breaker
@@ -75,4 +74,7 @@ def build_squad(cfg: SquadConfig, jail: Path, confirm: Callable[[str], bool], ma
         tools=[build_delegate(subagents, cfg, max_cost)],
         system_prompt=cfg.roles["supervisor"].prompt.read_text()
         + f"\n\n## Configured roster (delegate by exact name)\n{roster}",
+        # supervisor history is the run's accumulator — without this it grows
+        # O(N²) input tokens across delegations; max_context now caps it
+        middleware=history_middleware(cfg, "supervisor"),
     )

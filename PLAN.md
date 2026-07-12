@@ -418,13 +418,6 @@ tool with cost visibility — if the project stalls there, it still earned its k
 
 Deferred work and known soft spots — not out-of-scope, just not done yet.
 
-- **Supervisor history still grows unbounded.** The compression checkpoint
-  gates each handoff *string* at `trigger_tokens`; results below it return to
-  the supervisor's message list uncompressed and accumulate — N delegations →
-  O(N²) input tokens on the supervisor's model. `max_context` and
-  `keep_last_messages` are declared in config but not wired to any live
-  message list. Fix: trim/digest the supervisor history itself (deepagents
-  middleware or a pre-model hook) once it crosses `max_context`.
 - **Loop-limit soft cap is prompt-only.** The ≈3-round review cap lives in the
   supervisor prompt; hard termination relies on `max_turns` (recursion limit) +
   `--max-cost`. Upgrade path if the prompt proves unreliable: a per-subtask
@@ -446,4 +439,9 @@ from the task; PR bodies come from the scout's PR notes; model-call log
 records are accounting-only; shell output is head+tail capped; compressor
 input is chunked to the local model's window; roles default is 6 (§7 updated);
 linguist-style `profile` tool computes language shares + tooling in one
-deterministic call (scout no longer burns turns exploring by hand).
+deterministic call (scout no longer burns turns exploring by hand);
+`max_context` + `keep_last_messages` are wired — every agent (supervisor
+included) carries a history-summarization middleware that fires at the role's
+`max_context`, digests older messages with the local compressor model, and
+keeps the last `keep_last_messages` verbatim, so supervisor history no longer
+grows O(N²) across delegations.
