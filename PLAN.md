@@ -30,7 +30,7 @@ with full traffic interception. Everything outside that sentence gets a "no".
                       ┌───▼───┐ ┌─▼───┐ ┌─▼───┐ ┌─▼────┐  through interceptor)
                       │planner│ │scout│ │coder│ │review│
                       └───┬───┘ └──┬──┘ └──┬──┘ └──┬───┘
- models (via LiteLLM):  opus-4.8 flash-lt gemini  opus-4.8
+ models (via LiteLLM):  opus-4.8 haiku   sonnet  opus-4.8
  tools:                 read-fs  browse  shell+fs read-fs
                                          +git
                                        │
@@ -110,7 +110,7 @@ The five defaults:
 # squad.yaml (excerpt)
 roles:
   supervisor:
-    model: gemini/gemini-3-flash        # cheap-mid; it only routes & decides
+    model: gemini/gemini-2.5-flash      # cheap-mid GA; it only routes & decides
     prompt: prompts/supervisor.md
     tools: []                            # delegates only, no direct tools
 
@@ -121,13 +121,13 @@ roles:
     max_context: 100000
 
   scout:
-    model: gemini/gemini-3.1-flash-lite
+    model: anthropic/claude-haiku-4-5
     prompt: prompts/scout.md
     tools: [browse]                      # Playwright MCP + fetch. NO shell. NO fs write.
     max_context: 60000
 
   coder:
-    model: gemini/gemini-3-pro
+    model: anthropic/claude-sonnet-5
     prompt: prompts/coder.md
     tools: [shell, fs, git_commit]       # gated shell + files + commit (own branch only)
     max_context: 120000
@@ -393,7 +393,8 @@ tool with cost visibility — if the project stalls there, it still earned its k
 
 ## 7. Explicitly out of scope (v1)
 
-- Web UI / dashboard — `squad log` + JSONL is enough; a UI is a separate project.
+- Web UI / dashboard — `squad log` + JSONL is enough; a UI is a separate
+  project (see §9: companion local UI with Telegram remote).
 - Peer-to-peer agent communication — supervisor relay only.
 - Cross-squad coordination (locks, shared state, auto-merge) — squads are
   isolated by worktree; merging is a human decision.
@@ -423,6 +424,20 @@ Deferred work and known soft spots — not out-of-scope, just not done yet.
   select) are supervisor-driven, not forced by code. Prove it in a live run
   (pending); decide whether any call should be automatic rather than a
   delegation choice.
+- **Companion project: local UI with Telegram remote.** A separate
+  "mission control" app (not part of squad core) that installs and watches
+  multiple squads across multiple projects, streams their run logs, and
+  accepts commands remotely via Telegram. It should also be able to pull a
+  GitHub repo it doesn't have locally and put a squad to work on it
+  (`clone → squad init → squad run`). Squad core stays adapter-free; the
+  companion drives it through the existing CLI + `logs/<run-id>.jsonl`
+  seam. Prerequisite worth owning in core: a machine-readable run summary
+  (e.g. `--json` final status/cost/branch) so the UI doesn't scrape logs.
+  The UI must present run logs **human-readably, per project**: render each
+  project's `logs/<run-id>.jsonl` as a timeline (task → handoffs → outcome)
+  with per-role cost, not raw JSONL. Core already has the pieces — logs are
+  per-project (`logs/` in cwd) and `squad log` renders one run — the UI
+  generalizes that view across projects.
 Resolved since first written: the review cap is code-enforced — `delegate`
 bumps a per-subtask review counter in the subtask store and refuses past
 `REVIEW_CAP` (3) with an escalate message (runs without a subtask stack are
