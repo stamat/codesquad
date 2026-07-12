@@ -16,6 +16,46 @@ These rules are like a law in the system. They are the best programming practice
 - **Declarative programming is preferred**, where applicable.
 - **Immutability by default**
 
+### Cost control
+
+Cost reduction is the point of the project, so it is enforced, not hoped for:
+
+- **Cost breaker.** A running USD total (`--max-cost`, default $1) is checked before every `delegate` handoff; crossing it halts the run. Stops a runaway loop from burning budget.
+- **Turn cap.** Each role has a `max_turns` limit (a recursion cap) so no single agent spins forever.
+- **Disable.** `--max-cost 0` (any value ≤ 0) turns the cost breaker off for unbounded runs — use when the task is trusted and no ceiling is wanted. The turn cap stays as a hard safety rail against infinite recursion; raise it in config rather than removing it.
+
+### Model routing
+
+Each role runs on the cheapest model that can do its job — the routing *is* the cost strategy. All of it is pure config in `squad.yaml`; code never hardcodes a role's model.
+
+| Role | Tier | Model (example) | Why |
+|------|------|-----------------|-----|
+| scout | cheapest | gemini flash-lite | high-volume browsing, shallow reasoning |
+| compressor | local / free | Ollama qwen3:8b | runs constantly — keep it off the paid meter, and private |
+| scribe | cheap-mid, **thinking** | gemini flash (thinking) | curates prompt / report / subtask context — relevance judgment, so a reasoning-capable model |
+| supervisor | cheap-mid | gemini flash | only routes and decides, no deep thought |
+| coder | mid | gemini pro | writes code — needs competence, not genius |
+| planner | frontier | opus | runs once per task; deep reasoning pays off here |
+| reviewer | frontier | opus | catching bugs is where a strong model earns its cost |
+
+Principle: **cheap browses, local compresses, a thinking model curates, mid codes, frontier plans and reviews.** Spend big only where a mistake is expensive (planning, review) or where the model runs just once (planner). Models named are examples — the point is the tiering, not the specific SKUs.
+
+#### Compression vs curation — two roles, not one
+
+The concept originally lumped both under "compressor." Split them, because they want different model tiers:
+
+- **compressor** shrinks a *given* string — mechanical, faithful token reduction, facts preserved. Fires automatically at every `delegate` handoff over `trigger_tokens`; originals always land in the JSONL log, only the live context shrinks. Local / free model — it runs constantly.
+- **scribe** decides what a string *should contain* — editorial and relevance judgment: fix typos and tighten the incoming prompt, give a one-sentence summary, shrink the discovery report to only what's prompt-relevant, pick which report bits align with each subtask. Deliberate, at named pipeline points. A cheap-mid **thinking** model — a botched judgment corrupts the task spec or feeds the coder wrong context, so it must reason, not just squeeze bytes.
+
+Rule of thumb: **byte-count → compressor; relevance / quality → scribe.**
+
+### Handoffs and capabilities
+
+Two mechanics underpin every phase below:
+
+- **Handoffs go through one `delegate` tool.** Whenever the text says "through the supervisor," it means a single `delegate(role, task, context)` call — the one interception point. It logs task + context in and the result out, attributes the model spend to the receiving role, and checks the cost breaker *before* each handoff. There is no ad-hoc agent-to-agent messaging; the relay is the audit and cost boundary.
+- **Capability is tool binding, not prose.** A role can only do what its bound tools allow. A tool absent from a role's list is never constructed, so the model physically cannot call it — the prompt carries specialization, the binding carries security. Only the coder holds `shell`; planner and reviewer are read-only (`fs_read`); the supervisor holds nothing but `delegate`. The filesystem tool is jailed so `..`/absolute paths can't escape the repo.
+
 ### Initial phase
 
 Agent: supervisor
@@ -24,25 +64,28 @@ A task is given
 
 Task can be performed over a repo GIT or if there is no repo a new project directory is created and the git repo is initialised.
 
-Task can be a prompt, GitHub issue or a Linear issue. In order not to waste tokens we need a notation that can be parsed telling us whether it is an issue and what tool to reach.
-`.env` will need both GitHub API and Linear API keys.
+Task can be a prompt, GitHub issue or a Linear issue. In order not to waste tokens we need a notation that can be parsed telling us whether it is an issue and what tool to reach — a small router over the input (`gh:123` / `linear:ABC-123` / plain prompt), a few lines of regex, no more.
 
-GitHub integration can use `gh` terminal commands, but we prefer API to lean onto the tool and reduce the usage of tokens.
+We fetch through existing tools, not a bespoke API client:
+
+- **GitHub**: `gh issue view <n> --json title,body,labels` through the gated shell. `--json` returns exactly the fields we ask for — API-grade token control with zero code to maintain.
+- **Linear**: its official MCP server, bound to whichever role needs it. Drop to a ~15-line GraphQL fetch only if the MCP responses ever prove token-bloated — measured, not speculative.
+
+No hand-rolled two-provider API layer: `gh` and MCP own auth, rate limits and pagination for us. This keeps the "MCP is the plugin system, build nothing bespoke" rule.
 
 Here is where the loop breaks into two possible loops, based on if the repo exists and we are doing work on existing code or we are creating a new project.
 
-Prompt is then passed to a compressor agent. Compressor agent role is to review the textual prompt/issue. Improve the prompt by fixing typos, making sure it’s to the point and perform compression. (Maybe we need a better name, like scribe?)
-Compressor should also provide one sentence summary if it’s a long prompt.
+Prompt is then passed to the **scribe** (not the compressor — this is judgment work, see *Compression vs curation* above). Scribe reviews the textual prompt/issue: fixes typos, makes it to the point, and — for a long prompt — gives a one-sentence summary. Compression here is a side effect of curation, not the goal.
 
-After the prompt is compressed the supervisor createas a git branch, names it based on the issue title or number, or one sentence summary prefixed by `squad/`, starts the discovery phase.
+After the scribe has tidied the prompt the supervisor creates a git branch, names it based on the issue title or number, or the one-sentence summary, prefixed by `squad/`, and starts the discovery phase.
 
 ### Discovery phase
 
-Agent: scount
+Agent: scout
 
-Basic data collection about the project: Languages used (we should use a GitHub Linguist like tool to save on tokens), testing and linting tools, Readme (passed through compressor/scribe agent - to make it to the point and reduce token count)
+Basic data collection about the project: Languages used (we should use a GitHub Linguist like tool to save on tokens), testing and linting tools, Readme (passed through the scribe — to make it to the point and reduce token count)
 
-We can store this data in `.squad` directory, but we should make sure it’s up to date before and after every loop is complete. This should be a job for scout.
+We can store this data under `logs/` (per-run job documents; `~/.squad` is reserved for worktrees), but we should make sure it’s up to date before and after every loop is complete. This should be a job for scout.
 
 Scout should then investigate the prompt and scout the codebase for the files that need updating, making a list.
 
@@ -50,7 +93,7 @@ If it is the new project, supervisor already initialised the repo. Scout perform
 
 #### Web search (scouting loop)
 
-We need a web search tool, that will extract the text and links form the web page. We need only basic html like lists, blockqotes, links, anything that would make reading straightforward. We should have a tool to convert a html page contents to markdown notation. The scout does a google search, gets the results, decides if it wants to explore further. It makes a stack of links to read through.
+Scout's `browse` tool extracts the text and links from a web page. We need only basic HTML — lists, blockquotes, links, anything that makes reading straightforward — converted to markdown notation. Under the hood this is a plain `fetch` plus Playwright (via MCP) for pages that need a real browser; there is no bespoke Google API. Scout runs a search through `browse`, gets the results, decides if it wants to explore further, and makes a stack of links to read through.
 
 Stack is fetched one by one, compressed by the compressor. and handed back to the scout. Scout then has to decide if the data fetched is useful or follow additional links per each fetch looping through it again.
 
@@ -60,15 +103,27 @@ If we are starting a new project we want to answer the following questions:
 - Is there a value in starting a project like this?
 - Does the benefit match or exceeds the effort.
 
-Scout then compiles a report combining all the data. Report is then sent to the compressor. Compressor tries to shrink it but keeping all the data related to the prompt.
+Scout then compiles a report combining all the data. Report is then sent to the **scribe**, which shrinks it to only what's relevant to the prompt — keeping every prompt-related fact, dropping the rest. (Relevance is a judgment call, hence scribe not compressor.)
 
-Report is then stored as an `.md` file and logged in the filesystem. `.squad` directory should be used as a database ob jobs. We need a tool to log the prompt(issue) and assign a directory name to it. This is where the each job documents will be stored. If it’s a GitHub or a Linear issue we need to post the report as a comment as well. **Reports need to be in markdown notation.** Report should contain the language of the project, the most prominent language, and other minor languages. Testing and lint pipeline.
+Report is then stored as an `.md` file and logged in the filesystem. The `logs/` directory is the job database. We need a tool to log the prompt (issue) and assign a directory name to it. This is where each job's documents are stored. If it’s a GitHub or a Linear issue we need to post the report as a comment as well. **Reports need to be in markdown notation.** Report should contain the language of the project, the most prominent language, and other minor languages. Testing and lint pipeline.
 
 #### Note about the code style
 
 Code style note should be a separate file. Based on the discovery we should manage it. It supplements the context. It contains the language, environment details, testing and linting pipelines types and execution info.
 
-Report is then passed to the supervisor that initiates the coder.
+Report is then passed to the supervisor that initiates the planner.
+
+### Planning phase
+
+Agent: planner
+
+Planner runs once per task. It reads the discovery report and the code style note, and reads the repo (read-only) to ground the plan. Strong model — this is the one place deep reasoning pays off, so we spend the frontier tokens here.
+
+Task (initial compressed prompt or an issue) is broken into granular subtasks. Each subtask is a self-contained prompt (subprompt). **Eliminate contradiction** between subtasks here, before any code is written.
+
+Planner produces the subtask stack — the tool that stacks subtasks so the coder can pull them one by one. Each subtask is a new context filled with only the info from the initial report that aligns with that subtask. The decision of what aligns is delegated to the **scribe** (relevance judgment, thinking model).
+
+Planner never edits code. The stack goes back to the supervisor, which initiates the coder.
 
 ### Coding phase
 
@@ -76,13 +131,7 @@ Agent: coder
 
 Coder should be able to perform the tasks of coding with the tools to execute terminal commands related to the job it is performing.
 
-Initial research should be regarded as a context. Code style note as well.
-
-Task (initial compressed prompt or an issue) should be broken into granular steps.
-
-Each step is a prompt (subprompt). **Eliminate contradiction**.
-
-We need a tool that will stack these subtasks so the agent can access them one by one. Each subtask is a new context filled with only info from the initial report that aligns with the subtask. We can delegate the decision of what aligns to the compressor.
+Initial research should be regarded as a context. Code style note as well. The planner's subtask stack drives the work — coder pulls subtasks one by one, does not re-derive them.
 
 It should also be able to access other projects on the users machine and review the code if it’s useful. Try to find the functions that already solve the tasks, depending on the LICENSE.
 
@@ -107,7 +156,7 @@ Reviews the pending, not committed, code. Has access to the granular tasks of th
 
 Generates findings on what should be improved and passes them to the coder. Coder makes the update, reviewer compares it to the findings and signs it off.
 
-Supervisor commits the code - commit message is the subtask prompt. Tells coder to resume, and so on until all of the subtasks are signed off.
+Once the reviewer signs off, the coder commits the code via its `git_commit` tool — commit message is the subtask prompt. The supervisor tells the coder to resume the next subtask, and so on until all of the subtasks are signed off. Committing is the coder's only write to git; the supervisor holds no tools and never touches the repo directly.
 
 All communication can be compressed, but maybe shouldn’t be between the coder and reviewer.
 
@@ -125,4 +174,4 @@ PR is created. Loop is complete.
 
 - All the conversation must be logged in a big markdown file. Each role noted before the context.
 - User should be updated through the CLI on what’s going on as well.
-- Maybe worktree support is not needed? We should make it optional and not remove it. I’m thinking it’s we are rarely to use simultaneously run squad on the same codebase in parallel, but there are cases when we are touching different parts of the code.
+- Worktrees are the default, not optional. `squad run` creates a per-run worktree + branch before agents start; `squad clean` removes only merged ones; agents are denied `git worktree` by the shell gate. This buys both isolation (each run is sandboxed to its own checkout) and the ability to run several squads on the same codebase in parallel, touching different parts. A push failure (e.g. no origin) degrades to "branch stays local" — the run's work is never lost by the PR step failing.
