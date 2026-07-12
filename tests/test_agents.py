@@ -7,7 +7,7 @@ import pytest
 from codesquad.agents import build_agent, fs_permissions, load_prompt
 from codesquad.config import load_config
 
-CONFIG = Path(__file__).parent.parent / "squad.yaml"
+from conftest import TEMPLATE_CONFIG as CONFIG
 
 
 @pytest.fixture(scope="module")
@@ -84,6 +84,22 @@ def test_fs_read_roles_get_write_deny_permission():
     assert fs_permissions(["fs", "fs_read"]) is None   # writer roles unrestricted
     assert fs_permissions(["fs"]) is None
     assert fs_permissions([]) is None
+
+
+def test_inline_system_role_uses_yaml_text():
+    # a role with inline `system:` uses that text verbatim as its system prompt
+    from codesquad.agents import role_system_prompt
+    from codesquad.config import RoleConfig
+
+    r = RoleConfig(model="m", system="You are inline.")
+    assert role_system_prompt(r) == "You are inline."
+
+
+def test_file_prompt_role_reads_and_expands_file(cfg):
+    from codesquad.agents import role_system_prompt
+
+    text = role_system_prompt(cfg.roles["coder"])   # file-backed, has {principles}
+    assert "{principles}" not in text and len(text) > 0
 
 
 def test_git_commit_bound_only_with_run_id_and_commit_role(cfg, tmp_path):

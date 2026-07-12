@@ -1,9 +1,14 @@
 """Suite-wide policy: offline. MCP loading spawns real server processes (npx
 Playwright etc.) — stub it everywhere; tests that care monkeypatch their own."""
 
+from pathlib import Path
+
 import pytest
 
 from codesquad.tools import mcp
+
+# The default config now lives inside the package (shipped for `squad init`).
+TEMPLATE_CONFIG = Path(__file__).parent.parent / "src" / "codesquad" / "templates" / "codesquad.yaml"
 
 
 @pytest.fixture(autouse=True)

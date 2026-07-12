@@ -12,3 +12,7 @@ wheels/
 # squad
 logs/
 .env
+
+# local dev scaffold from `squad init` (canonical copy lives in src/codesquad/templates/)
+/codesquad.yaml
+/prompts/

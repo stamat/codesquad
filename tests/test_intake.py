@@ -51,9 +51,11 @@ def test_gh_failure_is_loud(tmp_path, monkeypatch):
 
 
 def test_linear_issue_tagged_for_mcp(tmp_path):
-    t = intake.resolve_task("linear:ABC-42", tmp_path)
+    t = intake.resolve_task("linear:abc-42", tmp_path)  # lowercase in, identifier out
     assert "ABC-42" in t.text and "linear" in t.text.lower()
     assert t.slug == "abc-42" and t.gh_issue is None
+    assert t.linear_issue == "ABC-42"
+    assert t.text.splitlines()[0] == "Linear issue ABC-42"  # first line = PR title
     assert t.closes == "Closes ABC-42"               # Linear magic word, no '#'
 
 

@@ -7,7 +7,7 @@ import pytest
 from codesquad.config import load_config
 from codesquad.router import complete, ping_role, resolve_model
 
-CONFIG = Path(__file__).parent.parent / "squad.yaml"
+from conftest import TEMPLATE_CONFIG as CONFIG
 
 
 @pytest.fixture(scope="module")

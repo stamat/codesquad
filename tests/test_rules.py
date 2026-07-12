@@ -1,4 +1,4 @@
-"""Shell gate rules — security-relevant, table-driven, uses the real squad.yaml patterns."""
+"""Shell gate rules — security-relevant, table-driven, uses the real codesquad.yaml patterns."""
 
 from pathlib import Path
 
@@ -7,7 +7,7 @@ import pytest
 from codesquad.config import load_config
 from codesquad.rules import check_command
 
-CONFIG = Path(__file__).parent.parent / "squad.yaml"
+from conftest import TEMPLATE_CONFIG as CONFIG
 
 
 @pytest.fixture(scope="module")

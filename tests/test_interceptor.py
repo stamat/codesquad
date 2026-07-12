@@ -10,7 +10,7 @@ from codesquad.interceptor import RunLog, aggregate, current_log, current_role, 
 from codesquad.router import chat_model
 from codesquad.tools.shell import run_shell
 
-CONFIG = Path(__file__).parent.parent / "squad.yaml"
+from conftest import TEMPLATE_CONFIG as CONFIG
 
 
 def records(log: RunLog) -> list[dict]:

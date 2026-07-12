@@ -1,5 +1,5 @@
 """MCP client loader + plain fetch. `browse` = Playwright MCP + fetch, scout's toolset.
-User servers from squad.yaml `mcp_servers` bind by name in a role's tools list."""
+User servers from codesquad.yaml `mcp_servers` bind by name in a role's tools list."""
 
 import asyncio
 import urllib.request

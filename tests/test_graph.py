@@ -10,7 +10,7 @@ from codesquad.config import load_config
 from codesquad.graph import BudgetExceeded, build_delegate, build_squad
 from codesquad.interceptor import RunLog, current_role
 
-CONFIG = Path(__file__).parent.parent / "squad.yaml"
+from conftest import TEMPLATE_CONFIG as CONFIG
 
 
 @pytest.fixture(scope="module")

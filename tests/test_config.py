@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from codesquad.config import GitConfig, SquadConfig, load_config
+from conftest import TEMPLATE_CONFIG
 
-REPO_ROOT = Path(__file__).parent.parent
+from codesquad.config import GitConfig, SquadConfig, load_config
 
 
 def minimal(**overrides) -> dict:
@@ -24,10 +24,12 @@ def minimal(**overrides) -> dict:
 def write_config(tmp_path: Path, data: dict) -> Path:
     (tmp_path / "prompts").mkdir(exist_ok=True)
     for role in data.get("roles", {}).values():
+        if "prompt" not in role:   # inline `system:` roles have no file
+            continue
         p = tmp_path / role["prompt"]
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text("# prompt stub")
-    path = tmp_path / "squad.yaml"
+    path = tmp_path / "codesquad.yaml"
     path.write_text(yaml.safe_dump(data))
     return path
 
@@ -36,7 +38,7 @@ def write_config(tmp_path: Path, data: dict) -> Path:
 
 
 def test_repo_default_config_loads():
-    cfg = load_config(REPO_ROOT / "squad.yaml")
+    cfg = load_config(TEMPLATE_CONFIG)
     assert set(cfg.roles) == {"supervisor", "planner", "scout", "scribe", "coder", "reviewer"}
     for role in cfg.roles.values():
         assert role.prompt.exists()
@@ -68,12 +70,39 @@ def test_mcp_server_names_are_bindable_tools(tmp_path):
     assert cfg.roles["scout"].tools == ["playwright"]
 
 
+# --- inline system prompts ---
+
+
+def test_inline_system_role_loads(tmp_path):
+    data = minimal(roles={
+        "supervisor": {"model": "m", "prompt": "prompts/supervisor.md"},
+        "helper": {"model": "m", "system": "You are a helpful inline agent."},
+    })
+    cfg = load_config(write_config(tmp_path, data))
+    assert cfg.roles["helper"].system == "You are a helpful inline agent."
+    assert cfg.roles["helper"].prompt is None
+
+
+def test_role_with_both_prompt_and_system_rejected(tmp_path):
+    data = minimal(roles={
+        "supervisor": {"model": "m", "prompt": "prompts/supervisor.md", "system": "x"},
+    })
+    with pytest.raises(ValueError, match="exactly one"):
+        load_config(write_config(tmp_path, data))
+
+
+def test_role_with_neither_prompt_nor_system_rejected(tmp_path):
+    data = minimal(roles={"supervisor": {"model": "m"}})
+    with pytest.raises(ValueError, match="exactly one"):
+        load_config(write_config(tmp_path, data))
+
+
 # --- failure modes ---
 
 
 def test_missing_config_file():
     with pytest.raises(FileNotFoundError, match="config not found"):
-        load_config(Path("/nonexistent/squad.yaml"))
+        load_config(Path("/nonexistent/codesquad.yaml"))
 
 
 def test_missing_supervisor_role(tmp_path):

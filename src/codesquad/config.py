@@ -1,4 +1,4 @@
-"""Load and validate squad.yaml. Fail loud on bad config."""
+"""Load and validate codesquad.yaml. Fail loud on bad config."""
 
 import re
 from pathlib import Path
@@ -14,10 +14,20 @@ BUILTIN_TOOLS = {"shell", "fs", "fs_read", "browse", "render", "git_commit",
 
 class RoleConfig(BaseModel):
     model: str  # LiteLLM model string, e.g. "anthropic/claude-opus-4-8"
-    prompt: Path
+    prompt: Path | None = None   # role prompt file (relative to config); {principles} expands here
+    system: str | None = None    # OR inline system message, straight in the yaml
     tools: list[str] = Field(default_factory=list)
     max_context: int = 100_000
     max_turns: int = 20
+
+    @model_validator(mode="after")
+    def one_prompt_source(self) -> "RoleConfig":
+        if bool(self.prompt) == bool(self.system):
+            which = "both" if self.prompt else "neither"
+            raise ValueError(
+                f"role needs exactly one of 'prompt' (file path) or 'system' (inline text); got {which}"
+            )
+        return self
 
 
 class CompressorConfig(BaseModel):
@@ -87,13 +97,15 @@ class SquadConfig(BaseModel):
 
 
 def load_config(path: Path) -> SquadConfig:
-    """Parse and validate squad.yaml. Prompt paths are resolved relative to the config file."""
+    """Parse and validate codesquad.yaml. Prompt paths are resolved relative to the config file."""
     if not path.exists():
         raise FileNotFoundError(f"config not found: {path}")
     data = yaml.safe_load(path.read_text()) or {}
     cfg = SquadConfig.model_validate(data)
     base = path.parent
     for name, role in cfg.roles.items():
+        if role.prompt is None:   # inline `system:` role — no file to resolve
+            continue
         role.prompt = (base / role.prompt).resolve()
         if not role.prompt.exists():
             raise FileNotFoundError(f"prompt file for role {name!r} not found: {role.prompt}")

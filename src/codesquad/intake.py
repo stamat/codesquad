@@ -18,6 +18,7 @@ class Task:
     text: str                      # what the squad actually works on
     slug: str                      # short branch-name fragment
     gh_issue: int | None = None    # set → post the run's report back as a comment
+    linear_issue: str | None = None  # set → task expects a linear MCP tool on some role
     closes: str | None = None      # closing keyword line for the PR body (auto-closes on merge)
 
 
@@ -46,9 +47,11 @@ def resolve_task(raw: str, repo: Path) -> Task:
     if m := _LINEAR.match(raw):
         issue = m.group(1).upper()
         return Task(
-            text=(f"Linear issue {issue}: fetch its title and description via the "
+            # first line doubles as the PR title — keep the MCP instructions below it
+            text=(f"Linear issue {issue}\n\nFetch its title and description via the "
                   f"linear MCP tools, then complete it."),
             slug=_slugify(issue),
+            linear_issue=issue,
             closes=f"Closes {issue}",  # Linear magic word: identifier, no '#'
         )
     return Task(text=raw, slug=_slugify(raw))

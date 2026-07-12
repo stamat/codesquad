@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 from pathlib import Path
 
 import typer
@@ -11,7 +12,10 @@ from codesquad.config import SquadConfig, load_config
 
 app = typer.Typer(no_args_is_help=True, help="Heterogeneous multi-agent squads with full traffic interception.")
 
-CONFIG_OPT = typer.Option(Path("squad.yaml"), "--config", "-c", help="Path to squad.yaml")
+# Bundled defaults, shipped inside the wheel (installs unzipped → __file__-relative path is reliable).
+TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+DEFAULT_CONFIG = Path("codesquad.yaml")
+CONFIG_OPT = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="Path to codesquad.yaml (falls back to the bundled default)")
 LOGS_DIR = Path("logs")
 OVERRIDE_OPT = typer.Option(
     None, "--override", "-o",
@@ -24,13 +28,86 @@ def _apply_override(model: str | None) -> None:
         os.environ["SQUAD_MODEL_OVERRIDE"] = model
 
 
+def _resolve_config(config: Path) -> Path:
+    """Local codesquad.yaml wins; if the default name is absent, use the bundled template
+    (so an installed tool — or the repo before `squad init` — works out of the box)."""
+    if not config.exists() and config == DEFAULT_CONFIG:
+        return TEMPLATES_DIR / "codesquad.yaml"
+    return config
+
+
 def _load(config: Path) -> SquadConfig:
     load_dotenv()
     try:
-        return load_config(config)
+        return load_config(_resolve_config(config))
     except (ValueError, FileNotFoundError) as e:
         typer.secho(f"config error: {e}", fg="red", err=True)
+        typer.secho("run 'squad init' to scaffold a codesquad.yaml you can edit", fg="yellow", err=True)
         raise typer.Exit(1) from e
+
+
+def merge_env(existing: str, template: str) -> tuple[str, list[str]]:
+    """Append the template's `KEY=` lines whose key is absent from `existing`.
+    Existing values are never touched; nothing is duplicated. Returns (text, added_keys)."""
+    def keys(text: str) -> list[str]:
+        out = []
+        for line in text.splitlines():
+            s = line.strip()
+            if s and not s.startswith("#") and "=" in s:
+                out.append(s.split("=", 1)[0].strip())
+        return out
+
+    have = set(keys(existing))
+    add_lines, added = [], []
+    for line in template.splitlines():
+        s = line.strip()
+        if s and not s.startswith("#") and "=" in s:
+            key = s.split("=", 1)[0].strip()
+            if key not in have:
+                add_lines.append(line)
+                added.append(key)
+                have.add(key)
+    if not add_lines:
+        return existing, []
+    sep = "" if existing.endswith("\n") else "\n"
+    merged = f"{existing}{sep}\n# added by squad init\n" + "\n".join(add_lines) + "\n"
+    return merged, added
+
+
+@app.command()
+def init(
+    directory: Path = typer.Argument(Path("."), help="Where to scaffold (default: current dir)"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing codesquad.yaml and prompt files"),
+) -> None:
+    """Scaffold codesquad.yaml + prompts/ + .env into a directory."""
+    directory.mkdir(parents=True, exist_ok=True)
+
+    def copy(src: Path, dst: Path) -> None:
+        if dst.exists() and not force:
+            typer.secho(f"skip {dst} (exists; --force to overwrite)", fg="yellow")
+        else:
+            shutil.copyfile(src, dst)
+            typer.secho(f"wrote {dst}", fg="green")
+
+    copy(TEMPLATES_DIR / "codesquad.yaml", directory / "codesquad.yaml")
+    (directory / "prompts").mkdir(exist_ok=True)
+    for src in sorted((TEMPLATES_DIR / "prompts").glob("*.md")):
+        copy(src, directory / "prompts" / src.name)
+
+    env_dst = directory / ".env"
+    template = (TEMPLATES_DIR / "env.example").read_text()
+    if env_dst.exists():
+        merged, added = merge_env(env_dst.read_text(), template)
+        if added:
+            env_dst.write_text(merged)
+            typer.secho(f"updated {env_dst}: added {', '.join(added)}", fg="green")
+        else:
+            typer.secho(f"{env_dst} already has every key", fg="yellow")
+    else:
+        env_dst.write_text(template)
+        typer.secho(f"wrote {env_dst}", fg="green")
+
+    typer.secho("done — edit codesquad.yaml + .env, then: squad check", fg="cyan")
 
 
 @app.command()
@@ -74,6 +151,11 @@ def run(
         typer.secho(str(e), fg="red", err=True)
         raise typer.Exit(1) from e
     task = job.text
+    # config validation guarantees a 'linear' tool name implies a configured server
+    if job.linear_issue and not any("linear" in r.tools for r in cfg.roles.values()):
+        typer.secho("warning: linear task, but no role binds a 'linear' MCP tool — "
+                    "the squad cannot fetch the issue. Add mcp_servers.linear and list "
+                    "it in a role's tools (see README).", fg="yellow", err=True)
 
     log = RunLog.start(LOGS_DIR)
     entry = role or "supervisor"

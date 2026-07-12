@@ -8,7 +8,7 @@ from deepagents import FilesystemPermission, create_deep_agent
 from deepagents.backends import FilesystemBackend, StateBackend
 from langchain_core.tools import tool
 
-from codesquad.config import SquadConfig
+from codesquad.config import RoleConfig, SquadConfig
 from codesquad.router import chat_model
 from codesquad.tools.docs import save_doc
 from codesquad.tools.git import make_git_commit
@@ -60,6 +60,12 @@ def load_prompt(prompt_path: Path) -> str:
     return text
 
 
+def role_system_prompt(role: RoleConfig) -> str:
+    """A role's system message: inline `system:` text if set, else its prompt file
+    (with `{principles}` expanded). Config guarantees exactly one is present."""
+    return role.system if role.system else load_prompt(role.prompt)
+
+
 def build_agent(cfg: SquadConfig, role: str, jail: Path, confirm: Callable[[str], bool],
                 run_id: str | None = None):
     """One deepagents agent for a role: its model, its prompt, only its tools.
@@ -101,7 +107,7 @@ def build_agent(cfg: SquadConfig, role: str, jail: Path, confirm: Callable[[str]
     return create_deep_agent(
         model=chat_model(cfg, role),
         tools=tools,
-        system_prompt=load_prompt(r.prompt),
+        system_prompt=role_system_prompt(r),
         backend=backend,
         permissions=fs_permissions(r.tools),
         middleware=history_middleware(cfg, role),

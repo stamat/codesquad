@@ -52,7 +52,7 @@ All planned v1 phases are built; see [CONCEPT.md](CONCEPT.md), [PLAN.md](PLAN.md
  │ planner │  scout  │  coder  │ reviewer │───────────────────┘
  └────┬────┴────┬────┴────┬────┴────┬─────┘
       │         │         │         │        each role = own model + prompt
-   subtask   browse/    shell     fs_read    + tool list from squad.yaml;
+   subtask   browse/    shell     fs_read    + tool list from codesquad.yaml;
    stack     fetch,     (gated),  (read-     unlisted tool = never bound
              save_doc   fs, git_  only)
                         commit
@@ -69,7 +69,7 @@ the whole decision trail replayable from one JSONL.
 ## Requirements
 
 - Python 3.12+ and [uv](https://docs.astral.sh/uv/)
-- API keys for the providers in your `squad.yaml` (OpenAI, Google, Anthropic) — **or none**, see keyless mode below
+- API keys for the providers in your `codesquad.yaml` (OpenAI, Google, Anthropic) — **or none**, see keyless mode below
 - [Ollama](https://ollama.com) for the local compression model and keyless runs
 
 ## Start
@@ -78,8 +78,9 @@ the whole decision trail replayable from one JSONL.
 git clone https://github.com/stamat/codesquad.git && cd codesquad
 uv sync
 
-# keys (skip for keyless mode)
-cp .env.example .env   # fill in the keys you have
+# scaffold an editable config into the cwd: codesquad.yaml + prompts/ + .env
+uv run squad init
+$EDITOR .env           # fill in the keys you have (skip for keyless mode)
 
 # validate config + see the roster
 uv run squad check
@@ -88,10 +89,18 @@ uv run squad check
 uv run squad ping
 ```
 
-Install the `squad` command on your PATH (run it from any repo):
+`squad init` is optional: with no local `codesquad.yaml` the CLI falls back to the
+bundled defaults, so `check`/`run` work immediately. Run `init` when you want to edit
+the roster, prompts, or rules — it writes `codesquad.yaml` + `prompts/` and, for `.env`,
+appends any missing provider keys without touching values you've already set.
+
+Install the `squad` (and `codesquad`) command on your PATH — run from any repo:
 
 ```bash
-uv tool install .        # then just: squad run "…" --repo ~/code/myproject
+uv tool install .
+cd ~/code/myproject
+squad init                       # scaffold config here (or rely on the bundled defaults)
+squad run "add input validation to parse_user()"
 ```
 
 ## Keyless mode (no API keys)
@@ -168,34 +177,35 @@ commit). At run end you get branch + diffstat, then the PR step per
 `never` keeps it local. `uv run squad clean` removes worktrees whose branches
 you've merged. A non-git directory just runs in place, no worktree.
 
-Shell commands from agents pass a safety gate (`squad.yaml → shell_rules`):
+Shell commands from agents pass a safety gate (`codesquad.yaml → shell_rules`):
 deny patterns are refused outright (rm -rf /, forkbombs, worktree removal);
 confirm patterns (sudo, git push, pipe-to-shell, rm -rf) pause and ask you.
 Everything else runs cwd-jailed with a timeout; long output is cut in the
 middle (head + tail kept) so the agent sees the first error and the final
 summary without drowning its context.
 
-Roles, models, tools, and rules live in [squad.yaml](squad.yaml) — edit it, own it.
+Roles, models, tools, and rules live in [codesquad.yaml](src/codesquad/templates/codesquad.yaml)
+(the bundled default; `squad init` copies it into your cwd to edit) — own it.
 
 ## .env — keys and endpoints
 
 `.env` (gitignored, loaded automatically at CLI start) holds only secrets and
-endpoints — never model choices, those live in squad.yaml:
+endpoints — never model choices, those live in codesquad.yaml:
 
 ```bash
-OPENAI_API_KEY=...          # only the providers your squad.yaml actually uses
+OPENAI_API_KEY=...          # only the providers your codesquad.yaml actually uses
 GEMINI_API_KEY=...
 ANTHROPIC_API_KEY=...
 # OLLAMA_API_BASE=http://localhost:11434   # only if Ollama runs elsewhere
 ```
 
 **How Ollama is wired:** there is no key and no special code path. A model
-string like `ollama_chat/qwen3:8b` in squad.yaml (or `--override`) makes
+string like `ollama_chat/qwen3:8b` in codesquad.yaml (or `--override`) makes
 LiteLLM call your local Ollama HTTP API (`localhost:11434` by default,
 `OLLAMA_API_BASE` to change). Which model — compressor, a role, everything —
-is config in squad.yaml like any other provider.
+is config in codesquad.yaml like any other provider.
 
-## squad.yaml reference
+## codesquad.yaml reference
 
 One file, five sections:
 
@@ -203,7 +213,8 @@ One file, five sections:
 roles: # a role = model + prompt + tools. Add a block = add a role.
   coder:
     model: gemini/gemini-3-pro # any LiteLLM model string; swap providers by editing this line
-    prompt: prompts/coder.md # the role's specialization, relative to this file
+    prompt: prompts/coder.md # the role's specialization, relative to this file ({principles} expands here)
+    # system: "You are …"    # OR an inline system message instead of a prompt file (exactly one of the two)
     tools: [shell, fs, git_commit] # capability boundary: unlisted tool = never bound = uncallable
     max_context: 120000 # live history above this is summarized by the local compressor
     max_turns: 20 # per-delegation loop cap
@@ -289,7 +300,7 @@ roles:
 at all if `gh` is logged in.)
 
 Built-in `browse` (scout's toolset) = two cheap tools
-([src/squad/tools/mcp.py](src/squad/tools/mcp.py)):
+([src/codesquad/tools/mcp.py](src/codesquad/tools/mcp.py)):
 `search(query)` (DuckDuckGo via `ddgs`, no API key) returns compact
 title/url/snippet results instead of a raw SERP; `fetch(url)` runs the page
 through trafilatura → main content as clean markdown (scripts/nav/styles
@@ -310,21 +321,20 @@ uv run pytest tests/test_rules.py -v   # just the shell-gate security tests
 
 | Path                         | What                                                                |
 | ---------------------------- | ------------------------------------------------------------------- |
-| `squad.yaml`                 | roles, models, rules, git, MCP servers — the whole product surface  |
-| `prompts/*.md`               | role specializations                                                |
-| `src/squad/config.py`        | config load + validation                                            |
-| `src/squad/router.py`        | role → LiteLLM model (incl. override)                               |
-| `src/squad/rules.py`         | shell command gate: deny → confirm → allow                          |
-| `src/squad/tools/shell.py`   | gated executor: jail, timeout, truncation                           |
-| `src/squad/agents.py`        | role config → deepagents agent (tool binding = capability boundary) |
-| `src/squad/graph.py`         | supervisor + `delegate` handoff tool + cost breaker                 |
-| `src/squad/interceptor.py`   | JSONL run log: model calls, shell, git, handoffs                    |
-| `src/squad/worktree.py`      | per-run worktree/branch lifecycle, PR step, clean                   |
-| `src/squad/tools/git.py`     | `git_commit` tool (commit_roles only, run-id trailer)               |
-| `src/squad/intake.py`        | task router: `gh:123` / `linear:ABC-123` / plain prompt             |
-| `src/squad/tools/docs.py`    | `save_doc`: run documents (report, code style, PR notes)            |
-| `src/squad/tools/profile.py` | linguist-style repo profile: languages + tooling, zero model turns  |
-| `src/squad/cli.py`           | `squad check / ping / run / log / cost / clean`                     |
+| `src/codesquad/templates/`   | bundled defaults shipped in the wheel: `codesquad.yaml`, `prompts/`, `env.example` |
+| `src/codesquad/cli.py`       | `squad init / check / run / ping / log / cost / clean`              |
+| `src/codesquad/config.py`        | config load + validation                                            |
+| `src/codesquad/router.py`        | role → LiteLLM model (incl. override)                               |
+| `src/codesquad/rules.py`         | shell command gate: deny → confirm → allow                          |
+| `src/codesquad/tools/shell.py`   | gated executor: jail, timeout, truncation                           |
+| `src/codesquad/agents.py`        | role config → deepagents agent (tool binding = capability boundary) |
+| `src/codesquad/graph.py`         | supervisor + `delegate` handoff tool + cost breaker                 |
+| `src/codesquad/interceptor.py`   | JSONL run log: model calls, shell, git, handoffs                    |
+| `src/codesquad/worktree.py`      | per-run worktree/branch lifecycle, PR step, clean                   |
+| `src/codesquad/tools/git.py`     | `git_commit` tool (commit_roles only, run-id trailer)               |
+| `src/codesquad/intake.py`        | task router: `gh:123` / `linear:ABC-123` / plain prompt             |
+| `src/codesquad/tools/docs.py`    | `save_doc`: run documents (report, code style, PR notes)            |
+| `src/codesquad/tools/profile.py` | linguist-style repo profile: languages + tooling, zero model turns  |
 
 ---
 

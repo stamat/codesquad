@@ -1,4 +1,4 @@
-"""Shell command gate: deny → confirm → allow. Driven by squad.yaml shell_rules."""
+"""Shell command gate: deny → confirm → allow. Driven by codesquad.yaml shell_rules."""
 
 import re
 from typing import Literal

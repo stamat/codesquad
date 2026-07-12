@@ -10,7 +10,7 @@ from tests.test_worktree import git, gitcfg, repo  # fixtures  # noqa: F401
 
 from pathlib import Path
 
-CONFIG = Path(__file__).parent.parent / "squad.yaml"
+from conftest import TEMPLATE_CONFIG as CONFIG
 
 
 @pytest.fixture(scope="module")

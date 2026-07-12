@@ -11,7 +11,7 @@ from codesquad import compress as comp
 from codesquad.config import CompressorConfig, load_config
 from codesquad.interceptor import RunLog
 
-CONFIG = Path(__file__).parent.parent / "squad.yaml"
+from conftest import TEMPLATE_CONFIG as CONFIG
 
 
 @pytest.fixture

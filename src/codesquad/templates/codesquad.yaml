@@ -1,4 +1,4 @@
-# squad configuration — roles, models, rules, git, MCP servers.
+# codesquad configuration — roles, models, rules, git, MCP servers.
 # This file is the whole product surface: edit it, own it.
 
 roles:

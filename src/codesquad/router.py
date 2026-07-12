@@ -23,7 +23,7 @@ class PingResult:
 
 def resolve_model(cfg: SquadConfig, role: str) -> str:
     """Configured model for a role. SQUAD_MODEL_OVERRIDE reroutes every role
-    (e.g. ollama/qwen3:8b for keyless dev) without touching squad.yaml."""
+    (e.g. ollama/qwen3:8b for keyless dev) without touching codesquad.yaml."""
     return os.environ.get("SQUAD_MODEL_OVERRIDE") or cfg.roles[role].model
 
 
