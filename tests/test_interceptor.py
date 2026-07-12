@@ -28,6 +28,22 @@ def test_write_creates_valid_jsonl(tmp_path):
     assert rec["ts"]
 
 
+def test_echo_prints_each_record_to_stderr(tmp_path, capsys):
+    log = RunLog.start(tmp_path, echo=True)
+    log.write("handoff", role="scout", direction="in", payload={"task": "profile the repo"})
+    log.write("model_call", role="scout", payload={"model": "m"},
+              tokens={"in": 10, "out": 2}, cost_usd=0.01)
+    err = capsys.readouterr().err
+    assert "scout" in err and "handoff" in err and "profile the repo" in err
+    assert "model_call" in err and "$0.0100" in err
+
+
+def test_echo_off_by_default(tmp_path, capsys):
+    log = RunLog.start(tmp_path)
+    log.write("handoff", role="scout", payload={"task": "x"})
+    assert capsys.readouterr().err == ""
+
+
 def test_model_call_logged_accounting_only(tmp_path):
     # decisions live in handoff/shell/git records; model_call is pure accounting —
     # embedding full message history made the log grow O(N²)

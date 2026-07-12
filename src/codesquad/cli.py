@@ -129,6 +129,7 @@ def run(
     override: str = OVERRIDE_OPT,
     role: str = typer.Option(None, "--role", help="Run a single role instead of the full squad"),
     auto: bool = typer.Option(False, "--auto", help="Unattended: never prompts. Confirm-gated shell commands are DECLINED (not approved); at run end push + PR happen automatically (Phase 5)."),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Stream every log record (handoffs, model calls, shell) to stderr as it happens"),
 ) -> None:
     """Run a squad on a task (supervisor graph; --role for a lone agent)."""
     from codesquad.agents import build_agent  # lazy: heavy imports
@@ -157,7 +158,7 @@ def run(
                     "the squad cannot fetch the issue. Add mcp_servers.linear and list "
                     "it in a role's tools (see README).", fg="yellow", err=True)
 
-    log = RunLog.start(LOGS_DIR)
+    log = RunLog.start(LOGS_DIR, echo=verbose)
     entry = role or "supervisor"
     current_role.set(entry)
     log.write("handoff", direction="in", payload={"task": task})

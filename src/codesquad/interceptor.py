@@ -8,6 +8,7 @@ whatever runs inside a run logs to that run.
 """
 
 import json
+import sys
 import uuid
 from datetime import datetime, timezone
 from dataclasses import dataclass
@@ -40,12 +41,13 @@ class RunLog:
     run_id: str
     path: Path
     total_cost: float = 0.0  # running sum, feeds the --max-cost breaker
+    echo: bool = False       # --verbose: mirror each record to stderr as it lands
 
     @classmethod
-    def start(cls, logs_dir: Path, run_id: str | None = None) -> "RunLog":
+    def start(cls, logs_dir: Path, run_id: str | None = None, echo: bool = False) -> "RunLog":
         run_id = run_id or f"{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}"
         logs_dir.mkdir(parents=True, exist_ok=True)
-        log = cls(run_id, logs_dir / f"{run_id}.jsonl")
+        log = cls(run_id, logs_dir / f"{run_id}.jsonl", echo=echo)
         current_log.set(log)
         return log
 
@@ -65,6 +67,13 @@ class RunLog:
         self.total_cost += cost_usd or 0.0
         with self.path.open("a") as f:
             f.write(json.dumps(rec, default=str) + "\n")
+        if self.echo:
+            head = json.dumps(payload, default=str) if payload else ""
+            meta = (f" [{(tokens or {}).get('in')}→{(tokens or {}).get('out')} tok,"
+                    f" ${cost_usd:.4f}]" if tokens else "")
+            print(f"{rec['ts'][11:19]} {rec['role']:<10} {kind:<10}"
+                  f"{' ' + direction if direction else ''}{meta} {head[:160]}",
+                  file=sys.stderr, flush=True)
 
 
 from langchain_litellm import ChatLiteLLM  # noqa: E402  (after slots: avoids cycle)
