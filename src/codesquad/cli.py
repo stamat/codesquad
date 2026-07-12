@@ -112,7 +112,8 @@ def run(
         typer.echo(wtree.summary(wt))
         mode = "auto" if auto else cfg.git.pr
         if mode == "auto" or (mode == "confirm" and typer.confirm("push branch and open a PR?")):
-            typer.echo(wtree.push_and_pr(wt, task, body=doc_or("pr-notes.md", answer)))
+            typer.echo(wtree.push_and_pr(wt, task, body=doc_or("pr-notes.md", answer),
+                                         closes=job.closes))
     if job.gh_issue:  # report back where the task came from
         typer.echo(comment_on_issue(job.gh_issue, doc_or("report.md", answer), target))
     typer.secho(f"\nrun {log.run_id} — cost ${log.total_cost:.4f} — log: {log.path}", fg="cyan")

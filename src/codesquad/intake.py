@@ -18,6 +18,7 @@ class Task:
     text: str                      # what the squad actually works on
     slug: str                      # short branch-name fragment
     gh_issue: int | None = None    # set → post the run's report back as a comment
+    closes: str | None = None      # closing keyword line for the PR body (auto-closes on merge)
 
 
 def _slugify(text: str, max_len: int = 30) -> str:
@@ -41,13 +42,14 @@ def resolve_task(raw: str, repo: Path) -> Task:
         text = f"GitHub issue #{n}: {d['title']}\n\n{d.get('body') or ''}"
         if labels:
             text += f"\n\nLabels: {labels}"
-        return Task(text=text, slug=f"gh-{n}", gh_issue=n)
+        return Task(text=text, slug=f"gh-{n}", gh_issue=n, closes=f"Closes #{n}")
     if m := _LINEAR.match(raw):
         issue = m.group(1).upper()
         return Task(
             text=(f"Linear issue {issue}: fetch its title and description via the "
                   f"linear MCP tools, then complete it."),
             slug=_slugify(issue),
+            closes=f"Closes {issue}",  # Linear magic word: identifier, no '#'
         )
     return Task(text=raw, slug=_slugify(raw))
 

@@ -41,18 +41,21 @@ def summary(wt: Worktree) -> str:
     return f"branch {wt.branch}\n{stat}"
 
 
-def push_and_pr(wt: Worktree, title: str, body: str | None = None) -> str:
+def push_and_pr(wt: Worktree, title: str, body: str | None = None,
+                closes: str | None = None) -> str:
     """Push the run branch and open a PR. CLI-only — never an agent capability.
-    body: the run's PR notes (what was done and why); falls back to the task."""
+    body: the run's PR notes (what was done and why); falls back to the task.
+    closes: closing-keyword line (e.g. 'Closes #12') so merge auto-closes the issue."""
     if not _git("rev-list", f"HEAD..{wt.branch}", cwd=wt.repo).strip():
         return f"no commits on {wt.branch} — nothing to push, branch stays local"
     try:
         _git("push", "-u", "origin", wt.branch, cwd=wt.path)
     except RuntimeError as e:
         return f"push failed ({str(e)[:200]}) — branch {wt.branch} stays local"
+    footer = (f"{closes}\n\n" if closes else "") + f"Squad-Run: {wt.run_id}"
     proc = subprocess.run(
         ["gh", "pr", "create", "--head", wt.branch, "--title", title.splitlines()[0][:70],
-         "--body", f"{body or f'Task: {title}'}\n\nSquad-Run: {wt.run_id}"],
+         "--body", f"{body or f'Task: {title}'}\n\n{footer}"],
         cwd=wt.path, capture_output=True, text=True,
     )
     if proc.returncode == 0:

@@ -41,6 +41,7 @@ def test_gh_issue_fetched_with_exact_fields(tmp_path, monkeypatch):
     assert "Login broken" in t.text and "500 on POST /login" in t.text
     assert "bug" in t.text
     assert t.slug == "gh-123" and t.gh_issue == 123
+    assert t.closes == "Closes #123"                 # PR body auto-closes the issue on merge
 
 
 def test_gh_failure_is_loud(tmp_path, monkeypatch):
@@ -53,6 +54,7 @@ def test_linear_issue_tagged_for_mcp(tmp_path):
     t = intake.resolve_task("linear:ABC-42", tmp_path)
     assert "ABC-42" in t.text and "linear" in t.text.lower()
     assert t.slug == "abc-42" and t.gh_issue is None
+    assert t.closes == "Closes ABC-42"               # Linear magic word, no '#'
 
 
 def test_comment_on_issue_best_effort(tmp_path, monkeypatch):
