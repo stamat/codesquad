@@ -418,21 +418,18 @@ tool with cost visibility — if the project stalls there, it still earned its k
 
 Deferred work and known soft spots — not out-of-scope, just not done yet.
 
-- **Loop-limit soft cap is prompt-only.** The ≈3-round review cap lives in the
-  supervisor prompt; hard termination relies on `max_turns` (recursion limit) +
-  `--max-cost`. Upgrade path if the prompt proves unreliable: a per-subtask
-  review counter (reuse the subtask store) that refuses past the cap.
 - **Scribe not yet exercised end-to-end.** The role is wired and delegatable,
   but the three curation calls (prompt tidy, report shrink, subtask-context
-  select) are supervisor-driven, not forced by code. Prove it in a live run;
-  decide whether any call should be automatic rather than a delegation choice.
-- **New-project viability questions** (competitors / value / effort, in
-  [prompts/scout.md](prompts/scout.md)) are arguably scope-creep vs the YAGNI
-  rule. Keep only if actually used; otherwise cut.
-- **TDD-first not encoded in the coder flow.** The law says tests first, but the
-  coder pulls a subtask and implements; the planner's "Verification" is guidance,
-  not a test-before-code gate. Consider making test-first explicit per subtask.
-Resolved since first written: `fs_read` is now write-enforced via
+  select) are supervisor-driven, not forced by code. Prove it in a live run
+  (pending); decide whether any call should be automatic rather than a
+  delegation choice.
+Resolved since first written: the review cap is code-enforced — `delegate`
+bumps a per-subtask review counter in the subtask store and refuses past
+`REVIEW_CAP` (3) with an escalate message (runs without a subtask stack are
+exempt); scout's new-project viability questions are cut (YAGNI); TDD-first is
+encoded in the flow — the planner's Verification names the test per step, the
+coder writes it first and sees it fail before implementing; `fs_read` is now
+write-enforced via
 `FilesystemPermission` (deny-all-writes); scout persists run docs with
 `save_doc`; task intake (`gh:` / `linear:`) routes issues; branches are named
 from the task; PR bodies come from the scout's PR notes; model-call log

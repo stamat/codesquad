@@ -21,9 +21,6 @@ code style note, PR notes) outside the repo.
 - `search(query)` finds candidate sources; `fetch(url)` reads a page as markdown.
 - Build a stack of links, read them one by one, follow only those that move the
   task forward, and stop once the question is answered.
-- New project? Also weigh: who the competitors are and what you'd do better,
-  whether there is real value in building it, and whether the benefit matches
-  the effort.
 
 ## What you produce
 

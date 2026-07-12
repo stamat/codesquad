@@ -28,3 +28,20 @@ def test_set_subtasks_overwrites(tmp_path):
     subtasks.complete_subtask.invoke({})
     subtasks.set_subtasks.invoke({"subtasks": ["fresh"]})
     assert "subtask 1/1: fresh" in subtasks.next_subtask.invoke({})
+
+
+def test_bump_review_counts_per_subtask(tmp_path):
+    RunLog.start(tmp_path)
+    subtasks.set_subtasks.invoke({"subtasks": ["a", "b"]})
+    assert subtasks.bump_review() == 1
+    assert subtasks.bump_review() == 2
+    subtasks.complete_subtask.invoke({})  # next subtask starts with a fresh counter
+    assert subtasks.bump_review() == 1
+
+
+def test_bump_review_without_stack_is_zero(tmp_path):
+    RunLog.start(tmp_path)  # no subtasks pushed — cap does not apply
+    assert subtasks.bump_review() == 0
+    subtasks.set_subtasks.invoke({"subtasks": ["only"]})
+    subtasks.complete_subtask.invoke({})  # exhausted stack behaves the same
+    assert subtasks.bump_review() == 0

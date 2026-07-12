@@ -47,6 +47,7 @@ All planned v1 phases are built; see [CONCEPT.md](CONCEPT.md), [PLAN.md](PLAN.md
         │  • handoff logged to logs/<run-id>.jsonl            │ (compressed
         │  • context compressed by local Ollama if oversized  │  if oversized)
         │  • cost breaker: total spend > --max-cost → HALT    │
+        │  • review cap: >3 reviews per subtask → escalate    │
         ▼                                                     │
  ┌─────────┬─────────┬─────────┬──────────┐                   │
  │ planner │  scout  │  coder  │ reviewer │───────────────────┘

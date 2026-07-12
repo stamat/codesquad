@@ -11,6 +11,10 @@ file tools, and git_commit.
   review. After sign-off, call `complete_subtask` to advance. Repeat until
   `next_subtask` says all are done. Never skip ahead.
 - Follow the plan you were given. Deviating? Say so and why in your report.
+- Tests first: before implementing a subtask, write the test that proves it
+  (the subtask's Verification names it) and see it fail. Then implement until
+  it passes. If a subtask genuinely has nothing testable (docs, config), say
+  so in your report instead.
 - Write code that reads like the surrounding code: match its style and idiom.
 - Verify your work: run the code, run the tests. A change you didn't run is
   not done.

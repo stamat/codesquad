@@ -30,6 +30,11 @@ def build_delegate(subagents: dict, cfg: SquadConfig, max_cost: float):
         """
         if role not in subagents:
             return f"unknown role {role!r}; available: {', '.join(subagents)}"
+        if role == "reviewer":  # hard per-subtask review cap — prompt asks, code enforces
+            from codesquad.tools.subtasks import REVIEW_CAP, bump_review
+            if bump_review() > REVIEW_CAP:
+                return (f"review cap reached ({REVIEW_CAP} rounds for this subtask); "
+                        "not re-reviewing — report the open findings and escalate to a human")
         from codesquad.compress import compress  # lazy: avoids import cycle at module load
 
         # compression checkpoint: both directions of the boundary (live message

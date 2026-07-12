@@ -10,6 +10,10 @@ from langchain_core.tools import tool
 
 from codesquad.interceptor import current_log
 
+# hard review cap per subtask — the supervisor prompt asks for ~3 rounds, this
+# enforces it in code so a drifting supervisor cannot loop review forever
+REVIEW_CAP = 3
+
 
 def _store() -> Path:
     log = current_log.get()
@@ -40,6 +44,20 @@ def next_subtask() -> str:
         if not it["done"]:
             return f"subtask {i + 1}/{len(items)}: {it['task']}"
     return "all subtasks done"
+
+
+def bump_review() -> int:
+    """Increment the review counter on the current subtask and return the new
+    count. Returns 0 when there is no active subtask — the cap does not apply
+    to runs without a stack. Not a tool: called by delegate, not by agents."""
+    p = _store()
+    items = _load(p)
+    for it in items:
+        if not it["done"]:
+            it["reviews"] = it.get("reviews", 0) + 1
+            p.write_text(json.dumps(items))
+            return it["reviews"]
+    return 0
 
 
 @tool

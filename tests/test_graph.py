@@ -85,6 +85,28 @@ def test_budget_breaker_disabled_when_max_cost_not_positive(cfg, tmp_path):
     assert fake.calls != []  # reached the subagent despite the huge cost
 
 
+def test_review_cap_refuses_past_limit(cfg, tmp_path):
+    RunLog.start(tmp_path)
+    from codesquad.tools import subtasks
+    subtasks.set_subtasks.invoke({"subtasks": ["one"]})
+    fake = FakeAgent("needs fixes")
+    delegate = build_delegate({"reviewer": fake}, cfg, max_cost=1.0)
+
+    for _ in range(subtasks.REVIEW_CAP):
+        assert "needs fixes" in delegate.invoke({"role": "reviewer", "task": "review"})
+    out = delegate.invoke({"role": "reviewer", "task": "review"})
+    assert "review cap" in out.lower()
+    assert len(fake.calls) == subtasks.REVIEW_CAP  # capped call never reached the agent
+
+
+def test_review_cap_ignores_runs_without_subtasks(cfg, tmp_path):
+    RunLog.start(tmp_path)  # trivial run, no subtask stack
+    fake = FakeAgent("looks good")
+    delegate = build_delegate({"reviewer": fake}, cfg, max_cost=1.0)
+    for _ in range(10):
+        assert "looks good" in delegate.invoke({"role": "reviewer", "task": "review"})
+
+
 def test_build_squad_constructs_supervisor_with_delegate(cfg, tmp_path):
     RunLog.start(tmp_path)
     squad = build_squad(cfg, jail=tmp_path, confirm=lambda c: False, max_cost=1.0)
