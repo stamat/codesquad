@@ -202,6 +202,13 @@ def run(
                                          closes=job.closes))
     if job.gh_issue:  # report back where the task came from
         typer.echo(comment_on_issue(job.gh_issue, doc_or("report.md", answer), target))
+    from codesquad.interceptor import run_totals
+
+    totals = run_totals(log.path)
+    if totals:
+        typer.echo(f"\n{'role':<12} {'calls':>5} {'in':>9} {'out':>8} {'cost $':>9}")
+        for r, t in sorted(totals.items(), key=lambda kv: -kv[1]["cost_usd"]):
+            typer.echo(f"{r:<12} {t['calls']:>5} {t['in']:>9} {t['out']:>8} {t['cost_usd']:>9.4f}")
     typer.secho(f"\nrun {log.run_id} — cost ${log.total_cost:.4f} — log: {log.path}", fg="cyan")
     if answer.startswith("HALTED"):
         raise typer.Exit(3)

@@ -91,6 +91,21 @@ def test_no_active_log_is_fine(tmp_path):
     assert "quiet" in out
 
 
+def test_run_totals_per_role(tmp_path):
+    from codesquad.interceptor import run_totals
+    log = RunLog.start(tmp_path)
+    log.write("model_call", role="scout", payload={"model": "m"},
+              tokens={"in": 100, "out": 10}, cost_usd=0.01)
+    log.write("model_call", role="scout", payload={"model": "m"},
+              tokens={"in": 200, "out": 20}, cost_usd=0.02)
+    log.write("model_call", role="coder", payload={"model": "m"},
+              tokens={"in": 50, "out": 5}, cost_usd=0.005)
+    log.write("shell", role="coder", payload={"command": "ls"})  # not a model call — ignored
+    t = run_totals(log.path)
+    assert t["scout"] == {"calls": 2, "in": 300, "out": 30, "cost_usd": 0.03}
+    assert t["coder"]["calls"] == 1
+
+
 def test_read_run_and_aggregate(tmp_path):
     log = RunLog.start(tmp_path)
     log.write("model_call", role="coder", payload={"model": "m1"},

@@ -190,7 +190,8 @@ Run documents the scout saves (`report.md`, `code-style.md`, `pr-notes.md`)
 land next to the log in `logs/<run-id>/`.
 
 Watch a run live with `squad run -v/--verbose` — every record (handoffs, model
-calls, shell commands) streams to stderr the moment it lands in the log.
+calls, shell commands) streams to stderr the moment it lands in the log. Every
+run ends with a per-role table (calls, in/out tokens, cost) plus the total.
 
 ```bash
 uv run squad log            # pretty-print the latest run (--full for whole payloads)

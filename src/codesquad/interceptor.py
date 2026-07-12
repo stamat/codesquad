@@ -8,7 +8,6 @@ whatever runs inside a run logs to that run.
 """
 
 import json
-import sys
 import uuid
 from datetime import datetime, timezone
 from dataclasses import dataclass
@@ -68,12 +67,30 @@ class RunLog:
         with self.path.open("a") as f:
             f.write(json.dumps(rec, default=str) + "\n")
         if self.echo:
-            head = json.dumps(payload, default=str) if payload else ""
-            meta = (f" [{(tokens or {}).get('in')}→{(tokens or {}).get('out')} tok,"
-                    f" ${cost_usd:.4f}]" if tokens else "")
-            print(f"{rec['ts'][11:19]} {rec['role']:<10} {kind:<10}"
-                  f"{' ' + direction if direction else ''}{meta} {head[:160]}",
-                  file=sys.stderr, flush=True)
+            self._echo(rec)
+
+    def _echo(self, rec: dict) -> None:
+        """One human line per record on stderr: the meaningful text, not raw JSON.
+        click strips the colors when stderr is not a tty."""
+        import click
+
+        p = rec["payload"] or {}
+        head = p.get("task") or p.get("result") or p.get("command") or p.get("model") \
+            or (json.dumps(p, default=str) if p else "")
+        head = " ".join(str(head).split())  # newlines/indent → single spaces
+        if p.get("verdict"):
+            head += f" [{p['verdict']}]"
+        tok = rec["tokens"] or {}
+        meta = f" [{tok.get('in')}→{tok.get('out')} tok, ${rec['cost_usd']:.4f}]" if tok else ""
+        arrow = {"in": " →", "out": " ←"}.get(rec["direction"] or "", "")
+        click.echo(
+            click.style(rec["ts"][11:19], dim=True) + " "
+            + click.style(f"{rec['role']:<10}", fg="cyan")
+            + click.style(f" {rec['kind']:<10}{arrow}", dim=True)
+            + click.style(meta, fg="yellow")
+            + f" {head[:160]}",
+            err=True,
+        )
 
 
 from langchain_litellm import ChatLiteLLM  # noqa: E402  (after slots: avoids cycle)
@@ -125,6 +142,20 @@ class LoggedChat(ChatLiteLLM):
 
 def read_run(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def run_totals(path: Path) -> dict[str, dict]:
+    """role → {calls, in, out, cost_usd} for one run — the end-of-run report."""
+    totals: dict[str, dict] = {}
+    for rec in read_run(path):
+        if rec["kind"] != "model_call":
+            continue
+        t = totals.setdefault(rec["role"], {"calls": 0, "in": 0, "out": 0, "cost_usd": 0.0})
+        t["calls"] += 1
+        t["in"] += (rec.get("tokens") or {}).get("in", 0)
+        t["out"] += (rec.get("tokens") or {}).get("out", 0)
+        t["cost_usd"] = round(t["cost_usd"] + (rec.get("cost_usd") or 0.0), 6)
+    return totals
 
 
 def aggregate(logs_dir: Path) -> dict[tuple[str, str], dict]:
