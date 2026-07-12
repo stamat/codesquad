@@ -241,14 +241,26 @@ shell_rules: # gate for roles that have `shell`
 mcp_servers: {} # your own tool servers, see below
 ```
 
-Built-in tools: `shell` (gated), `fs` (read/write, jailed), `fs_read`
-(read-only — writes are denied by filesystem permissions, not just by prompt),
-`browse` (scout's `search` + `fetch`), `render` (opt-in Playwright MCP),
-`git_commit`, `save_doc` (run documents to `logs/<run-id>/`), `profile`
-(linguist-style language shares + test/lint tooling, one deterministic call —
-no model turns spent exploring), and the subtask
-stack — `set_subtasks` (planner pushes the ordered plan), `next_subtask` /
-`complete_subtask` (coder pulls one at a time, marks each done after review).
+### Agent tools
+
+A role's `tools` list is its capability boundary — a tool not in the list is
+never bound, so the agent physically cannot call it. Built-ins:
+
+| Tool | What it does | Bound to (default roster) |
+| ---- | ------------ | ------------------------- |
+| `shell` | Run a shell command through the safety gate (deny → confirm → allow), cwd-jailed, timed out, output truncated head+tail | coder |
+| `fs` | Read/write files, jailed to the run's worktree (`..` and absolute escapes blocked) | coder |
+| `fs_read` | Read-only file access — writes denied by filesystem permission, not just by prompt | planner, scout, reviewer |
+| `browse` | Scout's web pair: `search(query)` (DuckDuckGo via `ddgs`, no key) + `fetch(url)` (trafilatura → clean markdown) | scout |
+| `render` | Playwright MCP for JS-rendered pages — opt-in, spawned on demand (pays its own cold-start + schema tax) | — |
+| `git_commit` | Commit in the run worktree; `commit_roles` only, run-id trailer on every commit | coder |
+| `save_doc` | Persist run documents (`report.md`, `code-style.md`, `pr-notes.md`) to `logs/<run-id>/` | scout |
+| `profile` | Linguist-style repo profile: language shares + test/lint tooling, one deterministic call (no model turns) | scout |
+| `set_subtasks` | Planner pushes the ordered plan onto the subtask stack | planner |
+| `next_subtask` | Coder pulls the next subtask | coder |
+| `complete_subtask` | Coder marks the current subtask done after review | coder |
+
+Plus any `mcp_servers` you define — bound by name, same list (see below).
 Every name in a role's `tools` must be a built-in or an `mcp_servers` key —
 config validation fails otherwise (`squad check` tells you).
 
