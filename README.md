@@ -26,6 +26,26 @@ stay verbatim).
 All planned v1 phases are built; see [CONCEPT.md](CONCEPT.md), [PLAN.md](PLAN.md) and
 [DECISIONS.md](DECISIONS.md) for why things are the way they are.
 
+## Quick start
+
+```bash
+uv tool install codesquad       # puts `squad` on your PATH
+cd ~/code/myproject
+squad init                      # scaffold codesquad.yaml + prompts/ + .env
+$EDITOR .env                    # add provider keys (or skip — see keyless mode)
+squad check                     # validate config + see the roster
+squad run "add input validation to parse_user()"
+```
+
+No API keys? Run everything on a local Ollama model:
+
+```bash
+ollama pull qwen3:8b
+squad run --override ollama_chat/qwen3:8b --role coder "create hello.py that prints hi, then run it"
+```
+
+Details: [Start](#start) (install on PATH, `squad init`), [Keyless mode](#keyless-mode-no-api-keys), [Use](#use).
+
 ## Flow
 
 ```
