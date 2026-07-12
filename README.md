@@ -40,6 +40,11 @@ squad run "add input validation to parse_user()"
 No API keys? Run everything on a local Ollama model:
 
 ```bash
+# install Ollama (https://ollama.com)
+brew install ollama            # macOS — or: curl -fsSL https://ollama.com/install.sh | sh (Linux)
+ollama serve &                 # start the server if it isn't running already
+
+# pull the Qwen model and run the squad on it
 ollama pull qwen3:8b
 squad run --override ollama_chat/qwen3:8b --role coder "create hello.py that prints hi, then run it"
 ```
@@ -231,6 +236,23 @@ subscription: `model: github_copilot/gpt-4.1` on a role just works (first call
 runs GitHub's device-flow auth; note Copilot is flat-rate, so those calls
 show $0 in cost accounting and never trip `--max-cost`).
 
+Common model strings (any of these drops into a role's `model:`):
+
+| Provider | Example string | Key env var |
+| -------- | -------------- | ----------- |
+| OpenAI | `gpt-5.2` (no prefix) | `OPENAI_API_KEY` |
+| Anthropic | `anthropic/claude-opus-4-8` | `ANTHROPIC_API_KEY` |
+| Google | `gemini/gemini-2.5-flash` | `GEMINI_API_KEY` |
+| xAI | `xai/grok-4` | `XAI_API_KEY` |
+| Mistral | `mistral/mistral-large-latest` | `MISTRAL_API_KEY` |
+| Groq | `groq/llama-3.3-70b-versatile` | `GROQ_API_KEY` |
+| OpenRouter | `openrouter/<any model on it>` | `OPENROUTER_API_KEY` |
+| GitHub Copilot | `github_copilot/gpt-4.1` | none (device flow) |
+| Ollama (local) | `ollama_chat/qwen3:8b` | none |
+
+Full list (100+ providers, incl. Bedrock, Azure, Vertex):
+[docs.litellm.ai/docs/providers](https://docs.litellm.ai/docs/providers).
+
 ## codesquad.yaml reference
 
 One file, five sections:
@@ -238,7 +260,7 @@ One file, five sections:
 ```yaml
 roles: # a role = model + prompt + tools. Add a block = add a role.
   coder:
-    model: gemini/gemini-3-pro # any LiteLLM model string; swap providers by editing this line
+    model: anthropic/claude-sonnet-5 # any LiteLLM model string; swap providers by editing this line
     prompt: prompts/coder.md # the role's specialization, relative to this file ({principles} expands here)
     # system: "You are …"    # OR an inline system message instead of a prompt file (exactly one of the two)
     tools: [shell, fs, git_commit] # capability boundary: unlisted tool = never bound = uncallable
