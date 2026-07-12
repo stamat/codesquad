@@ -10,13 +10,24 @@ from langchain_core.tools import tool
 
 from squad.config import SquadConfig
 from squad.router import chat_model
+from squad.tools.git import make_git_commit
 from squad.tools.shell import run_shell
 
 
-def build_agent(cfg: SquadConfig, role: str, jail: Path, confirm: Callable[[str], bool]):
-    """One deepagents agent for a role: its model, its prompt, only its tools."""
+def build_agent(cfg: SquadConfig, role: str, jail: Path, confirm: Callable[[str], bool],
+                run_id: str | None = None):
+    """One deepagents agent for a role: its model, its prompt, only its tools.
+    run_id present = the jail is a run worktree → git_commit may be bound."""
     r = cfg.roles[role]
     tools = []
+
+    if "git_commit" in r.tools and run_id:
+        if commit_tool := make_git_commit(cfg, role, jail, run_id):
+            tools.append(commit_tool)
+
+    if "browse" in r.tools or set(r.tools) & set(cfg.mcp_servers):
+        from squad.tools import mcp  # lazy: may spawn MCP server processes
+        tools += mcp.tools_for_role(r.tools, cfg.mcp_servers)
 
     if "shell" in r.tools:
         @tool

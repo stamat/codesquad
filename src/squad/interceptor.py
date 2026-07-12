@@ -65,48 +65,53 @@ class RunLog:
             f.write(json.dumps(rec, default=str) + "\n")
 
 
-class _Interceptor(litellm.integrations.custom_logger.CustomLogger):
-    """CustomLogger, not a plain success_callback function: those run in a
-    separate thread, so records could land after the run already ended (and
-    the total_cost breaker would lag). CustomLogger sync events run inline."""
+from langchain_litellm import ChatLiteLLM  # noqa: E402  (after slots: avoids cycle)
 
-    def log_success_event(self, kwargs, response_obj, start_time, end_time) -> None:
+
+class LoggedChat(ChatLiteLLM):
+    """ChatLiteLLM that logs every call inline, in the calling thread/task.
+
+    Not litellm callbacks: those run on a background logging worker, so
+    records could land after the run ended and the cost breaker would lag.
+    Inline = the record exists before the model's answer is used. The role
+    rides on the instance, so concurrent delegations attribute correctly."""
+
+    squad_role: str = "?"
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        result = super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        self._log(messages, result)
+        return result
+
+    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+        result = await super()._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
+        self._log(messages, result)
+        return result
+
+    def _log(self, messages, result) -> None:
         log = current_log.get()
         if log is None:
             return
-        usage = getattr(response_obj, "usage", None)
+        msg = result.generations[0].message if result.generations else None
+        usage = getattr(msg, "usage_metadata", None) or {}
+        tok_in, tok_out = usage.get("input_tokens", 0), usage.get("output_tokens", 0)
         try:
-            cost = litellm.completion_cost(completion_response=response_obj)
+            in_cost, out_cost = litellm.cost_per_token(
+                model=self.model, prompt_tokens=tok_in, completion_tokens=tok_out)
+            cost = in_cost + out_cost
         except Exception:
             cost = 0.0  # unknown/local models have no price entry
-        # per-call metadata beats the current_role global: concurrent delegations clobber the global
-        meta = (kwargs.get("litellm_params") or {}).get("metadata") or {}
         log.write(
             "model_call",
-            role=meta.get("role"),  # None → falls back to current_role inside write()
+            role=self.squad_role,
             payload={
-                "model": kwargs.get("model"),
-                "messages": kwargs.get("messages"),  # the full task context sent
-                "response": response_obj.choices[0].message.content if response_obj.choices else None,
+                "model": self.model,
+                "messages": [{"type": m.type, "content": m.content} for m in messages],
+                "response": msg.content if msg else None,
             },
-            tokens={
-                "in": getattr(usage, "prompt_tokens", 0) or 0,
-                "out": getattr(usage, "completion_tokens", 0) or 0,
-            },
+            tokens={"in": tok_in, "out": tok_out},
             cost_usd=cost,
         )
-
-    async def async_log_success_event(self, kwargs, response_obj, start_time, end_time) -> None:
-        self.log_success_event(kwargs, response_obj, start_time, end_time)
-
-
-_interceptor = _Interceptor()
-
-
-def install() -> None:
-    """Register the LiteLLM callback (idempotent)."""
-    if _interceptor not in litellm.callbacks:
-        litellm.callbacks.append(_interceptor)
 
 
 def read_run(path: Path) -> list[dict]:

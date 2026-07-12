@@ -30,3 +30,16 @@ def test_only_coder_gets_shell(cfg, tmp_path, role):
     # THE security property: no shell binding for browsing/reading roles.
     agent = build_agent(cfg, role, tmp_path, lambda c: False)
     assert "shell" not in bound_tools(agent)
+
+
+def test_scout_gets_fetch_others_do_not(cfg, tmp_path):
+    assert "fetch" in bound_tools(build_agent(cfg, "scout", tmp_path, lambda c: False))
+    assert "fetch" not in bound_tools(build_agent(cfg, "coder", tmp_path, lambda c: False))
+
+
+def test_git_commit_bound_only_with_run_id_and_commit_role(cfg, tmp_path):
+    # inside a worktree run: coder commits, reviewer never
+    assert "git_commit" in bound_tools(build_agent(cfg, "coder", tmp_path, lambda c: False, run_id="r1"))
+    assert "git_commit" not in bound_tools(build_agent(cfg, "reviewer", tmp_path, lambda c: False, run_id="r1"))
+    # outside a worktree (no run_id): nobody commits
+    assert "git_commit" not in bound_tools(build_agent(cfg, "coder", tmp_path, lambda c: False))

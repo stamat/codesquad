@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 
 from squad.config import ShellRules, load_config
-from squad.interceptor import RunLog, aggregate, current_log, current_role, install, read_run
-from squad.router import complete
+from squad.interceptor import RunLog, aggregate, current_log, current_role, read_run
+from squad.router import chat_model
 from squad.tools.shell import run_shell
 
 CONFIG = Path(__file__).parent.parent / "squad.yaml"
@@ -30,12 +30,10 @@ def test_write_creates_valid_jsonl(tmp_path):
 def test_model_call_logged_with_context_tokens_cost(tmp_path):
     cfg = load_config(CONFIG)
     log = RunLog.start(tmp_path)
-    install()
-    current_role.set("planner")
-    complete(cfg, "planner", [{"role": "user", "content": "plan something"}], mock="a plan")
-    recs = [r for r in records(log) if r["kind"] == "model_call"]
-    assert len(recs) == 1
-    rec = recs[0]
+    m = chat_model(cfg, "planner")
+    m.model_kwargs["mock_response"] = "a plan"  # offline; flows through to litellm
+    m.invoke("plan something")
+    (rec,) = [r for r in records(log) if r["kind"] == "model_call"]
     assert rec["role"] == "planner"
     assert "plan something" in json.dumps(rec["payload"]["messages"])  # full task context
     assert rec["payload"]["response"] == "a plan"
@@ -53,6 +51,19 @@ def test_shell_command_logged(tmp_path):
     assert recs[0]["payload"]["cmd"] == "echo logged"
     assert "logged" in recs[0]["payload"]["result"]
     assert recs[1]["payload"]["verdict"] == "deny"
+
+
+def test_model_call_role_rides_instance_not_global(tmp_path):
+    # concurrent delegations clobber the current_role global; the role on the
+    # model instance travels with the individual call and must win
+    cfg = load_config(CONFIG)
+    log = RunLog.start(tmp_path)
+    current_role.set("reviewer")  # the "wrong" concurrent value
+    m = chat_model(cfg, "coder")
+    m.model_kwargs["mock_response"] = "ok"
+    m.invoke("hi")
+    (rec,) = [r for r in records(log) if r["kind"] == "model_call"]
+    assert rec["role"] == "coder"
 
 
 def test_no_active_log_is_fine(tmp_path):

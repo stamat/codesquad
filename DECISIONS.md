@@ -14,14 +14,39 @@ a few lines: **what** we decided, **why**, and what we rejected.
 - **Focus before features.** New ideas go into PLAN.md or this file, not into
   the current phase's scope.
 
-## 2026-07-12 — Role attribution rides litellm metadata, not the global
+## 2026-07-12 — Model calls are logged inline in the model wrapper, not via litellm callbacks
 
-Supervisors can issue parallel `delegate` calls; LangGraph runs them
-concurrently, so the `current_role` global gets clobbered (live run showed
-coder's model calls tagged "reviewer"). Fix: `router.chat_model(cfg, role)`
-bakes `metadata={"role": ...}` into each role's model; the interceptor reads
-it from the callback kwargs per call. Global stays only as fallback (and for
-shell records — coder-only in practice).
+Two failures drove this: (1) litellm runs callbacks on background logging
+machinery — records could land *after* the run ended, which made a test flaky
+~20% and would lag the cost breaker; (2) supervisors issue parallel `delegate`
+calls, so the `current_role` global gets clobbered (live run showed coder's
+model calls tagged "reviewer"). Fix: `interceptor.LoggedChat` (a ChatLiteLLM
+subclass) writes the record inline in `_generate`/`_agenerate`, and carries
+its role on the instance. `router.chat_model(cfg, role)` is the only
+constructor. Globals stay only as fallback for shell records.
+
+## 2026-07-12 — Compression digests handoff strings, not message lists
+
+The `delegate` boundary carries two strings (context in, result out) — the
+compressor gates those, both directions. `keep_last_messages` stays in config
+unused until supervisor *history* ever needs digesting (deepagents manages
+subagent-internal context itself). Originals always land in the JSONL
+compress record; only live context shrinks.
+
+## 2026-07-12 — PR step refuses empty branches
+
+`push_and_pr` checks `rev-list HEAD..branch` first: a run that committed
+nothing pushes nothing (an accidental `--auto` run in this very repo pushed a
+junk empty branch to origin — guard added the same hour). Also procedure:
+live tests always point `--repo` at a scratch directory, never the tool's own
+checkout.
+
+## 2026-07-12 — Worktree creation/removal belongs to the CLI
+
+`squad run` creates the worktree + branch before agents start; `squad clean`
+removes only merged ones. Agents are denied `git worktree` commands by the
+shell gate. Push failures (e.g. no origin) degrade to "branch stays local" —
+the run's work is never lost by the PR step failing.
 
 ## 2026-07-12 — Handoffs go through our `delegate` tool, not deepagents subagents
 

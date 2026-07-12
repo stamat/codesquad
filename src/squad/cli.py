@@ -56,24 +56,30 @@ def run(
     """Run a squad on a task (supervisor graph; --role for a lone agent)."""
     from squad.agents import build_agent  # lazy: heavy imports
     from squad.graph import BudgetExceeded, build_squad
-    from squad.interceptor import RunLog, current_role, install
+    from squad.interceptor import RunLog, current_role
 
     _apply_override(override)
     cfg = _load(config)
     if role and role not in cfg.roles:
         typer.secho(f"unknown role {role!r}; have: {', '.join(cfg.roles)}", fg="red", err=True)
         raise typer.Exit(1)
+    from squad import worktree as wtree
+
     log = RunLog.start(LOGS_DIR)
-    install()
     entry = role or "supervisor"
     current_role.set(entry)
     log.write("handoff", direction="in", payload={"task": task})
-    # ponytail: cwd-jailed until Phase 5 gives each run its own worktree.
-    jail = (repo or Path.cwd()).resolve()
+    # git repo → own worktree + branch per run; plain dir → work in place
+    target = (repo or Path.cwd()).resolve()
+    wt = wtree.create(target, log.run_id, cfg.git) if (target / ".git").exists() else None
+    if wt:
+        typer.secho(f"worktree {wt.path} (branch {wt.branch})", fg="cyan")
+    jail = wt.path if wt else target
     # auto mode declines rather than approves: unattended runs must not self-authorize sudo/rm/pushes
     confirm = (lambda c: False) if auto else (lambda c: typer.confirm(f"allow shell command? {c}"))
-    agent = (build_agent(cfg, role, jail, confirm) if role
-             else build_squad(cfg, jail, confirm, max_cost))
+    run_id = log.run_id if wt else None
+    agent = (build_agent(cfg, role, jail, confirm, run_id=run_id) if role
+             else build_squad(cfg, jail, confirm, max_cost, run_id=run_id))
     try:
         result = agent.invoke(
             {"messages": [{"role": "user", "content": task}]},
@@ -86,6 +92,11 @@ def run(
     log.write("handoff", direction="out", payload={"result": answer})
     if not answer.startswith("HALTED"):
         typer.echo(answer)
+    if wt:
+        typer.echo(wtree.summary(wt))
+        mode = "auto" if auto else cfg.git.pr
+        if mode == "auto" or (mode == "confirm" and typer.confirm("push branch and open a PR?")):
+            typer.echo(wtree.push_and_pr(wt, task))
     typer.secho(f"\nrun {log.run_id} — cost ${log.total_cost:.4f} — log: {log.path}", fg="cyan")
     if answer.startswith("HALTED"):
         raise typer.Exit(3)
@@ -152,11 +163,22 @@ def cost() -> None:
 
 
 @app.command()
-def clean(config: Path = CONFIG_OPT) -> None:
-    """Remove finished worktrees (merged or discarded branches)."""
-    _load(config)
-    typer.secho("not yet: worktrees land in Phase 5", fg="yellow")
-    raise typer.Exit(2)
+def clean(
+    repo: Path = typer.Option(None, "--repo", help="Repo whose run worktrees to clean (default: cwd)"),
+    config: Path = CONFIG_OPT,
+) -> None:
+    """Remove finished worktrees (branches merged into HEAD)."""
+    from squad.worktree import clean as clean_worktrees
+
+    cfg = _load(config)
+    target = (repo or Path.cwd()).resolve()
+    if not (target / ".git").exists():
+        typer.secho(f"not a git repo: {target}", fg="red", err=True)
+        raise typer.Exit(1)
+    removed = clean_worktrees(target, cfg.git)
+    for p in removed:
+        typer.echo(f"removed {p}")
+    typer.secho(f"{len(removed)} worktree(s) removed", fg="green")
 
 
 def main() -> None:

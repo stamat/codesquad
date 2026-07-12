@@ -28,11 +28,12 @@ def resolve_model(cfg: SquadConfig, role: str) -> str:
 
 
 def chat_model(cfg: SquadConfig, role: str):
-    """LangChain chat model for a role, with the role baked into litellm metadata
-    so the interceptor attributes calls correctly even under concurrent delegations."""
-    from langchain_litellm import ChatLiteLLM  # lazy: heavy import
+    """LangChain chat model for a role. Logging happens inline in the wrapper
+    (squad.interceptor.LoggedChat) — litellm callbacks fire on a background
+    logging worker, so records could land after the run ended; ours can't."""
+    from squad.interceptor import LoggedChat  # lazy: heavy import
 
-    return ChatLiteLLM(model=resolve_model(cfg, role), model_kwargs={"metadata": {"role": role}})
+    return LoggedChat(model=resolve_model(cfg, role), squad_role=role)
 
 
 def complete(cfg: SquadConfig, role: str, messages: list[dict], mock: str | None = None, **kwargs):

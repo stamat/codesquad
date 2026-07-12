@@ -30,6 +30,12 @@ def build_delegate(subagents: dict, cfg: SquadConfig, max_cost: float):
         """
         if role not in subagents:
             return f"unknown role {role!r}; available: {', '.join(subagents)}"
+        from squad.compress import compress  # lazy: avoids import cycle at module load
+
+        # compression checkpoint: both directions of the boundary
+        # ponytail: keep_last_messages unused — we compress handoff strings, not
+        # message lists; wire it if supervisor history itself ever needs digesting.
+        context = compress(context, cfg.compressor)
         log = current_log.get()
         if log and log.total_cost >= max_cost:
             raise BudgetExceeded(f"run cost ${log.total_cost:.4f} reached --max-cost ${max_cost:.2f}")
@@ -47,6 +53,7 @@ def build_delegate(subagents: dict, cfg: SquadConfig, max_cost: float):
         finally:
             current_role.set(prev)
         answer = result["messages"][-1].text  # str even when content is block-list (thinking models)
+        answer = compress(answer, cfg.compressor)  # oversized results shrink before hitting supervisor
         if log:
             log.write("handoff", role=role, direction="out", payload={"result": answer[:4000]})
         return answer
@@ -54,9 +61,10 @@ def build_delegate(subagents: dict, cfg: SquadConfig, max_cost: float):
     return delegate
 
 
-def build_squad(cfg: SquadConfig, jail: Path, confirm: Callable[[str], bool], max_cost: float):
+def build_squad(cfg: SquadConfig, jail: Path, confirm: Callable[[str], bool], max_cost: float,
+                run_id: str | None = None):
     """The full squad: supervisor + one subagent per configured role."""
-    subagents = {name: build_agent(cfg, name, jail, confirm)
+    subagents = {name: build_agent(cfg, name, jail, confirm, run_id=run_id)
                  for name in cfg.roles if name != "supervisor"}
     roster = "\n".join(
         f"- {name} (tools: {', '.join(r.tools) or 'none'})"

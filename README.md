@@ -7,11 +7,15 @@ safety gate. Multiple squads can work the same repo concurrently via git
 worktrees.
 
 **Status: pre-alpha, built phase by phase.** Done: config, model router,
-gated shell, interception log with per-role token/cost accounting, and the
-supervisor graph — multi-agent relay with logged handoffs and a cost circuit
-breaker. Not yet: worktrees + PR step, browsing, compression.
-See [PLAN.md](PLAN.md) for the roadmap and [DECISIONS.md](DECISIONS.md) for
-why things are the way they are.
+gated shell, interception log with per-role token/cost accounting, the
+supervisor graph (multi-agent relay, logged handoffs, cost circuit breaker),
+per-run git worktrees with a gated commit tool + run-end PR step, scout
+browsing (plain `fetch` + Playwright MCP via the MCP loader), and local-model
+compression at handoff boundaries (oversized context is digested by Ollama
+before crossing between agents; originals stay in the log — a live check
+shrank 449 tokens to 96 with every fact intact).
+All planned v1 phases are built; see [PLAN.md](PLAN.md) and
+[DECISIONS.md](DECISIONS.md) for why things are the way they are.
 
 ## Requirements
 
@@ -90,6 +94,15 @@ uv run squad log            # pretty-print the latest run (--full for whole payl
 uv run squad log 20260712   # or a specific run by id prefix
 uv run squad cost           # per role/model: calls, tokens in/out, cost — across all runs
 ```
+
+**Worktrees:** pointing `--repo` at a git repo gives the run its own worktree
+(`~/.squad/worktrees/<repo>/<run-id>`) and branch (`squad/<run-id>`) — your
+checkout is never touched, and concurrent squads on one repo can't collide.
+Coder commits there via the gated `git_commit` tool (run-id trailer on every
+commit). At run end you get branch + diffstat, then the PR step per
+`git.pr` config: `confirm` asks, `auto` pushes + opens the PR unattended,
+`never` keeps it local. `uv run squad clean` removes worktrees whose branches
+you've merged. A non-git directory just runs in place, no worktree.
 
 Shell commands from agents pass a safety gate (`squad.yaml → shell_rules`):
 deny patterns are refused outright (rm -rf /, forkbombs, worktree removal);
@@ -197,8 +210,9 @@ roles:
 (Coder can also just `gh issue view 123` through the gated shell — no config
 at all if `gh` is logged in.)
 
-> Status: config + validation work today; actual MCP client wiring lands in
-> Phase 6 (`src/squad/tools/mcp.py`).
+Built-in `browse` (scout's toolset) = a plain `fetch` tool + Playwright MCP
+(`npx @playwright/mcp`, spawned on demand) through the same loader
+([src/squad/tools/mcp.py](src/squad/tools/mcp.py)).
 
 ## Test
 
@@ -218,4 +232,8 @@ uv run pytest tests/test_rules.py -v   # just the shell-gate security tests
 | `src/squad/rules.py` | shell command gate: deny → confirm → allow |
 | `src/squad/tools/shell.py` | gated executor: jail, timeout, truncation |
 | `src/squad/agents.py` | role config → deepagents agent (tool binding = capability boundary) |
+| `src/squad/graph.py` | supervisor + `delegate` handoff tool + cost breaker |
+| `src/squad/interceptor.py` | JSONL run log: model calls, shell, git, handoffs |
+| `src/squad/worktree.py` | per-run worktree/branch lifecycle, PR step, clean |
+| `src/squad/tools/git.py` | `git_commit` tool (commit_roles only, run-id trailer) |
 | `src/squad/cli.py` | `squad check / ping / run / log / cost / clean` |
