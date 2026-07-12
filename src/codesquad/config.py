@@ -18,7 +18,7 @@ class RoleConfig(BaseModel):
     system: str | None = None    # OR inline system message, straight in the yaml
     tools: list[str] = Field(default_factory=list)
     max_context: int = 100_000
-    max_turns: int = 20
+    max_turns: int = 40  # live runs: TDD coder needs ~30 calls, supervisor relay overruns 20
 
     @model_validator(mode="after")
     def one_prompt_source(self) -> "RoleConfig":

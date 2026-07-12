@@ -265,7 +265,7 @@ roles: # a role = model + prompt + tools. Add a block = add a role.
     # system: "You are …"    # OR an inline system message instead of a prompt file (exactly one of the two)
     tools: [shell, fs, git_commit] # capability boundary: unlisted tool = never bound = uncallable
     max_context: 120000 # live history above this is summarized by the local compressor
-    max_turns: 20 # per-delegation loop cap
+    max_turns: 40 # per-delegation loop cap
 
 compressor: # local model that squeezes context between agent handoffs
   model: ollama/qwen3:8b

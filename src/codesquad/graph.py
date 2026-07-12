@@ -56,8 +56,11 @@ def build_delegate(subagents: dict, cfg: SquadConfig, max_cost: float):
                 config={"recursion_limit": 2 * cfg.roles[role].max_turns},
             )
         except GraphRecursionError:  # subagent overran max_turns — report, don't kill the run
-            return (f"{role} hit its turn limit ({cfg.roles[role].max_turns} turns) without "
-                    "finishing. Retry with a narrower task, or proceed without it.")
+            answer = (f"{role} hit its turn limit ({cfg.roles[role].max_turns} turns) without "
+                      "finishing. Retry with a narrower task, or proceed without it.")
+            if log:
+                log.write("handoff", role=role, direction="out", payload={"result": answer})
+            return answer
         finally:
             current_role.set(prev)
         answer = result["messages"][-1].text  # str even when content is block-list (thinking models)
