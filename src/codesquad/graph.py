@@ -7,6 +7,7 @@ from typing import Callable
 
 from deepagents import create_deep_agent
 from langchain_core.tools import tool
+from langgraph.errors import GraphRecursionError
 
 from codesquad.agents import build_agent, history_middleware
 from codesquad.config import SquadConfig
@@ -54,6 +55,9 @@ def build_delegate(subagents: dict, cfg: SquadConfig, max_cost: float):
                 {"messages": [{"role": "user", "content": msg}]},
                 config={"recursion_limit": 2 * cfg.roles[role].max_turns},
             )
+        except GraphRecursionError:  # subagent overran max_turns — report, don't kill the run
+            return (f"{role} hit its turn limit ({cfg.roles[role].max_turns} turns) without "
+                    "finishing. Retry with a narrower task, or proceed without it.")
         finally:
             current_role.set(prev)
         answer = result["messages"][-1].text  # str even when content is block-list (thinking models)

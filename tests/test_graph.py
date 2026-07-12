@@ -107,6 +107,20 @@ def test_review_cap_ignores_runs_without_subtasks(cfg, tmp_path):
         assert "looks good" in delegate.invoke({"role": "reviewer", "task": "review"})
 
 
+def test_subagent_turn_overflow_returns_error_not_crash(cfg, tmp_path):
+    RunLog.start(tmp_path)
+    from langgraph.errors import GraphRecursionError
+
+    class OverflowAgent:
+        def invoke(self, payload, config=None):
+            raise GraphRecursionError("Recursion limit of 40 reached")
+
+    delegate = build_delegate({"scout": OverflowAgent()}, cfg, max_cost=1.0)
+    out = delegate.invoke({"role": "scout", "task": "profile the repo"})
+    assert "turn limit" in out.lower()  # supervisor gets a result, run survives
+    assert current_role.get() != "scout"  # role restored despite the failure
+
+
 def test_build_squad_constructs_supervisor_with_delegate(cfg, tmp_path):
     RunLog.start(tmp_path)
     squad = build_squad(cfg, jail=tmp_path, confirm=lambda c: False, max_cost=1.0)
