@@ -130,6 +130,7 @@ def run(
     role: str = typer.Option(None, "--role", help="Run a single role instead of the full squad"),
     auto: bool = typer.Option(False, "--auto", help="Unattended: never prompts. Confirm-gated shell commands are DECLINED (not approved); at run end push + PR happen automatically (Phase 5)."),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Stream every log record (handoffs, model calls, shell) to stderr as it happens"),
+    worktree: bool = typer.Option(False, "--worktree", help="Use a git worktree for the run (default: False; --worktree to work in worktree)")
 ) -> None:
     """Run a squad on a task (supervisor graph; --role for a lone agent)."""
     from codesquad.agents import build_agent  # lazy: heavy imports
@@ -164,7 +165,7 @@ def run(
     log.write("handoff", direction="in", payload={"task": task})
     # git repo → own worktree + branch per run; plain dir → work in place
     wt = (wtree.create(target, log.run_id, cfg.git, slug=job.slug)
-          if (target / ".git").exists() else None)
+          if (worktree and (target / ".git").exists()) else None)
     if wt:
         typer.secho(f"worktree {wt.path} (branch {wt.branch})", fg="cyan")
     jail = wt.path if wt else target

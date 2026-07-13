@@ -244,17 +244,17 @@ show $0 in cost accounting and never trip `--max-cost`).
 
 Common model strings (any of these drops into a role's `model:`):
 
-| Provider | Example string | Key env var |
-| -------- | -------------- | ----------- |
-| OpenAI | `gpt-5.2` (no prefix) | `OPENAI_API_KEY` |
-| Anthropic | `anthropic/claude-opus-4-8` | `ANTHROPIC_API_KEY` |
-| Google | `gemini/gemini-2.5-flash` | `GEMINI_API_KEY` |
-| xAI | `xai/grok-4` | `XAI_API_KEY` |
-| Mistral | `mistral/mistral-large-latest` | `MISTRAL_API_KEY` |
-| Groq | `groq/llama-3.3-70b-versatile` | `GROQ_API_KEY` |
-| OpenRouter | `openrouter/<any model on it>` | `OPENROUTER_API_KEY` |
-| GitHub Copilot | `github_copilot/gpt-4.1` | none (device flow) |
-| Ollama (local) | `ollama_chat/qwen3:8b` | none |
+| Provider       | Example string                 | Key env var          |
+| -------------- | ------------------------------ | -------------------- |
+| OpenAI         | `gpt-5.2` (no prefix)          | `OPENAI_API_KEY`     |
+| Anthropic      | `anthropic/claude-opus-4-8`    | `ANTHROPIC_API_KEY`  |
+| Google         | `gemini/gemini-2.5-flash`      | `GEMINI_API_KEY`     |
+| xAI            | `xai/grok-4`                   | `XAI_API_KEY`        |
+| Mistral        | `mistral/mistral-large-latest` | `MISTRAL_API_KEY`    |
+| Groq           | `groq/llama-3.3-70b-versatile` | `GROQ_API_KEY`       |
+| OpenRouter     | `openrouter/<any model on it>` | `OPENROUTER_API_KEY` |
+| GitHub Copilot | `github_copilot/gpt-4.1`       | none (device flow)   |
+| Ollama (local) | `ollama_chat/qwen3:8b`         | none                 |
 
 Full list (100+ providers, incl. Bedrock, Azure, Vertex):
 [docs.litellm.ai/docs/providers](https://docs.litellm.ai/docs/providers).
@@ -300,19 +300,19 @@ mcp_servers: {} # your own tool servers, see below
 A role's `tools` list is its capability boundary — a tool not in the list is
 never bound, so the agent physically cannot call it. Built-ins:
 
-| Tool | What it does | Bound to (default roster) |
-| ---- | ------------ | ------------------------- |
-| `shell` | Run a shell command through the safety gate (deny → confirm → allow), cwd-jailed, timed out, output truncated head+tail | coder |
-| `fs` | Read/write files, jailed to the run's worktree (`..` and absolute escapes blocked) | coder |
-| `fs_read` | Read-only file access — writes denied by filesystem permission, not just by prompt | planner, scout, reviewer |
-| `browse` | Scout's web pair: `search(query)` (DuckDuckGo via `ddgs`, no key) + `fetch(url)` (trafilatura → clean markdown) | scout |
-| `render` | Playwright MCP for JS-rendered pages — opt-in, spawned on demand (pays its own cold-start + schema tax) | — |
-| `git_commit` | Commit in the run worktree; `commit_roles` only, run-id trailer on every commit | coder |
-| `save_doc` | Persist run documents (`report.md`, `code-style.md`, `pr-notes.md`) to `logs/<run-id>/` | scout |
-| `profile` | Linguist-style repo profile: language shares + test/lint tooling, one deterministic call (no model turns) | scout |
-| `set_subtasks` | Planner pushes the ordered plan onto the subtask stack | planner |
-| `next_subtask` | Coder pulls the next subtask | coder |
-| `complete_subtask` | Coder marks the current subtask done after review | coder |
+| Tool               | What it does                                                                                                            | Bound to (default roster) |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `shell`            | Run a shell command through the safety gate (deny → confirm → allow), cwd-jailed, timed out, output truncated head+tail | coder                     |
+| `fs`               | Read/write files, jailed to the run's worktree (`..` and absolute escapes blocked)                                      | coder                     |
+| `fs_read`          | Read-only file access — writes denied by filesystem permission, not just by prompt                                      | planner, scout, reviewer  |
+| `browse`           | Scout's web pair: `search(query)` (DuckDuckGo via `ddgs`, no key) + `fetch(url)` (trafilatura → clean markdown)         | scout                     |
+| `render`           | Playwright MCP for JS-rendered pages — opt-in, spawned on demand (pays its own cold-start + schema tax)                 | —                         |
+| `git_commit`       | Commit in the run worktree; `commit_roles` only, run-id trailer on every commit                                         | coder                     |
+| `save_doc`         | Persist run documents (`report.md`, `code-style.md`, `pr-notes.md`) to `logs/<run-id>/`                                 | scout                     |
+| `profile`          | Linguist-style repo profile: language shares + test/lint tooling, one deterministic call (no model turns)               | scout                     |
+| `set_subtasks`     | Planner pushes the ordered plan onto the subtask stack                                                                  | planner                   |
+| `next_subtask`     | Coder pulls the next subtask                                                                                            | coder                     |
+| `complete_subtask` | Coder marks the current subtask done after review                                                                       | coder                     |
 
 Plus any `mcp_servers` you define — bound by name, same list (see below).
 Every name in a role's `tools` must be a built-in or an `mcp_servers` key —
@@ -385,22 +385,22 @@ uv run pytest tests/test_rules.py -v   # just the shell-gate security tests
 
 ## Layout
 
-| Path                         | What                                                                |
-| ---------------------------- | ------------------------------------------------------------------- |
-| `src/codesquad/templates/`   | bundled defaults shipped in the wheel: `codesquad.yaml`, `prompts/`, `env.example` |
-| `src/codesquad/cli.py`       | `squad init / check / run / ping / log / cost / clean`              |
-| `src/codesquad/config.py`        | config load + validation                                            |
-| `src/codesquad/router.py`        | role → LiteLLM model (incl. override)                               |
-| `src/codesquad/rules.py`         | shell command gate: deny → confirm → allow                          |
-| `src/codesquad/tools/shell.py`   | gated executor: jail, timeout, truncation                           |
-| `src/codesquad/agents.py`        | role config → deepagents agent (tool binding = capability boundary) |
-| `src/codesquad/graph.py`         | supervisor + `delegate` handoff tool + cost breaker                 |
-| `src/codesquad/interceptor.py`   | JSONL run log: model calls, shell, git, handoffs                    |
-| `src/codesquad/worktree.py`      | per-run worktree/branch lifecycle, PR step, clean                   |
-| `src/codesquad/tools/git.py`     | `git_commit` tool (commit_roles only, run-id trailer)               |
-| `src/codesquad/intake.py`        | task router: `gh:123` / `linear:ABC-123` / plain prompt             |
-| `src/codesquad/tools/docs.py`    | `save_doc`: run documents (report, code style, PR notes)            |
-| `src/codesquad/tools/profile.py` | linguist-style repo profile: languages + tooling, zero model turns  |
+| Path                             | What                                                                               |
+| -------------------------------- | ---------------------------------------------------------------------------------- |
+| `src/codesquad/templates/`       | bundled defaults shipped in the wheel: `codesquad.yaml`, `prompts/`, `env.example` |
+| `src/codesquad/cli.py`           | `squad init / check / run / ping / log / cost / clean`                             |
+| `src/codesquad/config.py`        | config load + validation                                                           |
+| `src/codesquad/router.py`        | role → LiteLLM model (incl. override)                                              |
+| `src/codesquad/rules.py`         | shell command gate: deny → confirm → allow                                         |
+| `src/codesquad/tools/shell.py`   | gated executor: jail, timeout, truncation                                          |
+| `src/codesquad/agents.py`        | role config → deepagents agent (tool binding = capability boundary)                |
+| `src/codesquad/graph.py`         | supervisor + `delegate` handoff tool + cost breaker                                |
+| `src/codesquad/interceptor.py`   | JSONL run log: model calls, shell, git, handoffs                                   |
+| `src/codesquad/worktree.py`      | per-run worktree/branch lifecycle, PR step, clean                                  |
+| `src/codesquad/tools/git.py`     | `git_commit` tool (commit_roles only, run-id trailer)                              |
+| `src/codesquad/intake.py`        | task router: `gh:123` / `linear:ABC-123` / plain prompt                            |
+| `src/codesquad/tools/docs.py`    | `save_doc`: run documents (report, code style, PR notes)                           |
+| `src/codesquad/tools/profile.py` | linguist-style repo profile: languages + tooling, zero model turns                 |
 
 ---
 

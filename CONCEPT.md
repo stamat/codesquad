@@ -29,17 +29,17 @@ Cost reduction is the point of the project, so it is enforced, not hoped for:
 
 ### Model routing
 
-Each role runs on the cheapest model that can do its job — the routing *is* the cost strategy. All of it is pure config in `squad.yaml`; code never hardcodes a role's model.
+Each role runs on the cheapest model that can do its job — the routing _is_ the cost strategy. All of it is pure config in `squad.yaml`; code never hardcodes a role's model.
 
-| Role | Tier | Model (example) | Why |
-|------|------|-----------------|-----|
-| scout | cheapest | gemini flash-lite | high-volume browsing, shallow reasoning |
-| compressor | local / free | Ollama qwen3:8b | runs constantly — keep it off the paid meter, and private |
-| scribe | cheap-mid, **thinking** | gemini flash (thinking) | curates prompt / report / subtask context — relevance judgment, so a reasoning-capable model |
-| supervisor | cheap-mid | gemini flash | only routes and decides, no deep thought |
-| coder | mid | gemini pro | writes code — needs competence, not genius |
-| planner | frontier | opus | runs once per task; deep reasoning pays off here |
-| reviewer | frontier | opus | catching bugs is where a strong model earns its cost |
+| Role       | Tier                    | Model (example)         | Why                                                                                          |
+| ---------- | ----------------------- | ----------------------- | -------------------------------------------------------------------------------------------- |
+| scout      | cheapest                | gemini flash-lite       | high-volume browsing, shallow reasoning                                                      |
+| compressor | local / free            | Ollama qwen3:8b         | runs constantly — keep it off the paid meter, and private                                    |
+| scribe     | cheap-mid, **thinking** | gemini flash (thinking) | curates prompt / report / subtask context — relevance judgment, so a reasoning-capable model |
+| supervisor | cheap-mid               | gemini flash            | only routes and decides, no deep thought                                                     |
+| coder      | mid                     | gemini pro              | writes code — needs competence, not genius                                                   |
+| planner    | frontier                | opus                    | runs once per task; deep reasoning pays off here                                             |
+| reviewer   | frontier                | opus                    | catching bugs is where a strong model earns its cost                                         |
 
 Principle: **cheap browses, local compresses, a thinking model curates, mid codes, frontier plans and reviews.** Spend big only where a mistake is expensive (planning, review) or where the model runs just once (planner). Models named are examples — the point is the tiering, not the specific SKUs.
 
@@ -47,8 +47,8 @@ Principle: **cheap browses, local compresses, a thinking model curates, mid code
 
 The concept originally lumped both under "compressor." Split them, because they want different model tiers:
 
-- **compressor** shrinks a *given* string — mechanical, faithful token reduction, facts preserved. Fires automatically at every `delegate` handoff over `trigger_tokens`; input is chunked to the local model's context window so nothing is silently tail-truncated, and the log keeps the digest + before/after token counts (the decision, not the flood it replaced). Local / free model — it runs constantly.
-- **scribe** decides what a string *should contain* — editorial and relevance judgment: fix typos and tighten the incoming prompt, give a one-sentence summary, shrink the discovery report to only what's prompt-relevant, pick which report bits align with each subtask. Deliberate, at named pipeline points. A cheap-mid **thinking** model — a botched judgment corrupts the task spec or feeds the coder wrong context, so it must reason, not just squeeze bytes.
+- **compressor** shrinks a _given_ string — mechanical, faithful token reduction, facts preserved. Fires automatically at every `delegate` handoff over `trigger_tokens`; input is chunked to the local model's context window so nothing is silently tail-truncated, and the log keeps the digest + before/after token counts (the decision, not the flood it replaced). Local / free model — it runs constantly.
+- **scribe** decides what a string _should contain_ — editorial and relevance judgment: fix typos and tighten the incoming prompt, give a one-sentence summary, shrink the discovery report to only what's prompt-relevant, pick which report bits align with each subtask. Deliberate, at named pipeline points. A cheap-mid **thinking** model — a botched judgment corrupts the task spec or feeds the coder wrong context, so it must reason, not just squeeze bytes.
 
 Rule of thumb: **byte-count → compressor; relevance / quality → scribe.**
 
@@ -56,7 +56,7 @@ Rule of thumb: **byte-count → compressor; relevance / quality → scribe.**
 
 Two mechanics underpin every phase below:
 
-- **Handoffs go through one `delegate` tool.** Whenever the text says "through the supervisor," it means a single `delegate(role, task, context)` call — the one interception point. It logs task + context in and the result out, attributes the model spend to the receiving role, and checks the cost breaker *before* each handoff. There is no ad-hoc agent-to-agent messaging; the relay is the audit and cost boundary.
+- **Handoffs go through one `delegate` tool.** Whenever the text says "through the supervisor," it means a single `delegate(role, task, context)` call — the one interception point. It logs task + context in and the result out, attributes the model spend to the receiving role, and checks the cost breaker _before_ each handoff. There is no ad-hoc agent-to-agent messaging; the relay is the audit and cost boundary.
 - **Capability is tool binding, not prose.** A role can only do what its bound tools allow. A tool absent from a role's list is never constructed, so the model physically cannot call it — the prompt carries specialization, the binding carries security. Only the coder holds `shell`; planner and reviewer are read-only (`fs_read`); the supervisor holds nothing but `delegate`. The filesystem tool is jailed so `..`/absolute paths can't escape the repo.
 
 ### Initial phase
@@ -78,7 +78,7 @@ No hand-rolled two-provider API layer: `gh` and MCP own auth, rate limits and pa
 
 Here is where the loop breaks into two possible loops, based on if the repo exists and we are doing work on existing code or we are creating a new project.
 
-Prompt is then passed to the **scribe** (not the compressor — this is judgment work, see *Compression vs curation* above). Scribe reviews the textual prompt/issue: fixes typos, makes it to the point, and — for a long prompt — gives a one-sentence summary. Compression here is a side effect of curation, not the goal.
+Prompt is then passed to the **scribe** (not the compressor — this is judgment work, see _Compression vs curation_ above). Scribe reviews the textual prompt/issue: fixes typos, makes it to the point, and — for a long prompt — gives a one-sentence summary. Compression here is a side effect of curation, not the goal.
 
 After the scribe has tidied the prompt the supervisor creates a git branch, names it based on the issue title or number, or the one-sentence summary, prefixed by `squad/`, and starts the discovery phase.
 
@@ -173,7 +173,7 @@ Review loops are bounded three ways, so the coder↔reviewer cycle can't run awa
 - **Hard: cost breaker.** `--max-cost` halts the run before each handoff once spend crosses the ceiling.
 - **Soft: graceful review cap.** The supervisor stops re-reviewing a subtask after a few rounds (≈3) and escalates — reports "needs a human" rather than looping forever on the same finding.
 
-The soft cap makes the stop *legible* (a clean escalation); the two hard caps guarantee termination regardless.
+The soft cap makes the stop _legible_ (a clean escalation); the two hard caps guarantee termination regardless.
 
 ### Finishing phase
 
@@ -190,4 +190,4 @@ PR is created. Loop is complete.
   commits, compression digests. Model calls are accounting records (model,
   tokens, cost). Each record carries its role.
 - User should be updated through the CLI on what’s going on as well.
-- Worktrees are the default, not optional. `squad run` creates a per-run worktree + branch before agents start; `squad clean` removes only merged ones; agents are denied `git worktree` by the shell gate. This buys both isolation (each run is sandboxed to its own checkout) and the ability to run several squads on the same codebase in parallel, touching different parts. A push failure (e.g. no origin) degrades to "branch stays local" — the run's work is never lost by the PR step failing.
+- Worktrees are optional. `squad run --worktree` creates a per-run worktree + branch before agents start (unless disabled); `squad clean` removes only merged ones; agents are denied `git worktree` by the shell gate. This buys both isolation (each run is sandboxed to its own checkout) and the ability to run several squads on the same codebase in parallel, touching different parts. A push failure (e.g. no origin) degrades to "branch stays local" — the run's work is never lost by the PR step failing.
