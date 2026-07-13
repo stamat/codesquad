@@ -1,5 +1,10 @@
 # codesquad
 
+> [!CAUTION]
+> Work in progress! Use at your own risk.
+> The loop is currently heavily unbalanced and **wastes a ton of tokens** for simple tasks.
+> Gets them done though...😅
+
 > Installs as `codesquad`, driven by the `squad` command.
 
 Personal deep-agent orchestrator: heterogeneous models per role (cheap model
