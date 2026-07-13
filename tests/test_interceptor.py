@@ -44,6 +44,22 @@ def test_echo_off_by_default(tmp_path, capsys):
     assert capsys.readouterr().err == ""
 
 
+def test_echo_shows_effort_when_present(tmp_path, capsys):
+    log = RunLog.start(tmp_path, echo=True)
+    log.write("model_call", role="planner", payload={"model": "m", "effort": "high"},
+              tokens={"in": 1, "out": 1}, cost_usd=0.0)
+    err = capsys.readouterr().err
+    assert "high" in err
+
+
+def test_echo_omits_effort_when_absent(tmp_path, capsys):
+    log = RunLog.start(tmp_path, echo=True)
+    log.write("model_call", role="planner", payload={"model": "m", "effort": None},
+              tokens={"in": 1, "out": 1}, cost_usd=0.0)
+    err = capsys.readouterr().err
+    assert "None" not in err
+
+
 def test_model_call_logged_accounting_only(tmp_path):
     # decisions live in handoff/shell/git records; model_call is pure accounting —
     # embedding full message history made the log grow O(N²)
