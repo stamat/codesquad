@@ -8,6 +8,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 _GH = re.compile(r"^gh:(\d+)$")
 _LINEAR = re.compile(r"^linear:([A-Za-z][A-Za-z0-9]*-\d+)$")
@@ -20,6 +21,7 @@ class Task:
     gh_issue: int | None = None    # set → post the run's report back as a comment
     linear_issue: str | None = None  # set → task expects a linear MCP tool on some role
     closes: str | None = None      # closing keyword line for the PR body (auto-closes on merge)
+    source: Literal["github", "linear", "plain"] = "plain"  # which branch resolved this task
 
 
 def _slugify(text: str, max_len: int = 30) -> str:
@@ -27,34 +29,48 @@ def _slugify(text: str, max_len: int = 30) -> str:
     return s[:max_len].rstrip("-") or "task"
 
 
+def _resolve_gh(n: int, repo: Path) -> Task:
+    proc = subprocess.run(
+        ["gh", "issue", "view", str(n), "--json", "title,body,labels"],
+        cwd=repo, capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"gh issue view {n} failed: stderr={proc.stderr.strip()!r} stdout={proc.stdout.strip()!r}"
+        )
+    d = json.loads(proc.stdout)
+    labels = ", ".join(l["name"] for l in d.get("labels", []))
+    text = f"GitHub issue #{n}: {d['title']}\n\n{d.get('body') or ''}"
+    if labels:
+        text += f"\n\nLabels: {labels}"
+    return Task(text=text, slug=f"gh-{n}", gh_issue=n, closes=f"Closes #{n}", source="github")
+
+
+def _resolve_linear(issue: str) -> Task:
+    issue = issue.upper()
+    return Task(
+        # first line doubles as the PR title — keep the MCP instructions below it
+        text=(f"Linear issue {issue}\n\nFetch its title and description via the "
+              f"linear MCP tools, then complete it."),
+        slug=_slugify(issue),
+        linear_issue=issue,
+        closes=f"Closes {issue}",  # Linear magic word: identifier, no '#'
+        source="linear",
+    )
+
+
+def _resolve_plain(raw: str) -> Task:
+    return Task(text=raw, slug=_slugify(raw), source="plain")
+
+
 def resolve_task(raw: str, repo: Path) -> Task:
     """Route the raw input: fetch a GitHub issue, tag a Linear one, or pass through."""
     raw = raw.strip()
     if m := _GH.match(raw):
-        n = int(m.group(1))
-        proc = subprocess.run(
-            ["gh", "issue", "view", str(n), "--json", "title,body,labels"],
-            cwd=repo, capture_output=True, text=True,
-        )
-        if proc.returncode != 0:
-            raise RuntimeError(f"gh issue view {n} failed: {proc.stderr.strip()}")
-        d = json.loads(proc.stdout)
-        labels = ", ".join(l["name"] for l in d.get("labels", []))
-        text = f"GitHub issue #{n}: {d['title']}\n\n{d.get('body') or ''}"
-        if labels:
-            text += f"\n\nLabels: {labels}"
-        return Task(text=text, slug=f"gh-{n}", gh_issue=n, closes=f"Closes #{n}")
+        return _resolve_gh(int(m.group(1)), repo)
     if m := _LINEAR.match(raw):
-        issue = m.group(1).upper()
-        return Task(
-            # first line doubles as the PR title — keep the MCP instructions below it
-            text=(f"Linear issue {issue}\n\nFetch its title and description via the "
-                  f"linear MCP tools, then complete it."),
-            slug=_slugify(issue),
-            linear_issue=issue,
-            closes=f"Closes {issue}",  # Linear magic word: identifier, no '#'
-        )
-    return Task(text=raw, slug=_slugify(raw))
+        return _resolve_linear(m.group(1))
+    return _resolve_plain(raw)
 
 
 def comment_on_issue(issue: int, body: str, repo: Path) -> str:
