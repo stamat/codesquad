@@ -23,7 +23,7 @@ token) — keep the two in sync:
 
 Cost reduction is the point of the project, so it is enforced, not hoped for:
 
-- **Cost breaker.** A running USD total (`--max-cost`, default $1) is checked before every `delegate` handoff; crossing it halts the run. Stops a runaway loop from burning budget.
+- **Cost breaker.** A running USD total (`--max-cost`, default 0, disabled) is checked before every `delegate` handoff; crossing it halts the run. Stops a runaway loop from burning budget.
 - **Turn cap.** Each role has a `max_turns` limit (a recursion cap) so no single agent spins forever.
 - **Disable.** `--max-cost 0` (any value ≤ 0) turns the cost breaker off for unbounded runs — use when the task is trusted and no ceiling is wanted. The turn cap stays as a hard safety rail against infinite recursion; raise it in config rather than removing it.
 

@@ -124,7 +124,7 @@ def check(config: Path = CONFIG_OPT) -> None:
 def run(
     task: str,
     repo: Path = typer.Option(None, "--repo", help="Target repo (worktree created per run)"),
-    max_cost: float = typer.Option(1.0, "--max-cost", help="USD circuit breaker; <=0 disables it"),
+    max_cost: float = typer.Option(0.0, "--max-cost", help="USD circuit breaker; <=0 disables it (default: 0)"),
     config: Path = CONFIG_OPT,
     override: str = OVERRIDE_OPT,
     role: str = typer.Option(None, "--role", help="Run a single role instead of the full squad"),
