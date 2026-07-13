@@ -10,12 +10,16 @@ Non-negotiable. Every implementation follows them; every review checks them.
 - **Focus before features (YAGNI).** Build only what the task needs. One
   function, one job. Keep functions short — short enough to read whole, without
   scrolling.
+- **Declarative over imperative** where it applies.
+- **Immutability by default.**
+- **Simpler is better (KISS)** - The system should remain as simple as possible
+  rather than making it overly complex.
 - **Self-explanatory names, readable code, composition over cleverness.**
   Classes, interfaces, functions, variables — a good name needs no comment.
   Consistent style throughout.
 - **No premature optimisation.** Optimise only when the task demands it, or when
   a simple change on a user-facing path yields real resource (thus cost) savings.
-- **Reuse before writing.** Standard library and native code over a new
+- **Reuse before writing.(DRY)** Standard library and native code over a new
   dependency; and reuse what already exists in this repo before adding anything
   new — the smallest correct change reuses what's here.
 - **Root cause over symptom.** A bug fix goes where all callers route through,
@@ -24,5 +28,3 @@ Non-negotiable. Every implementation follows them; every review checks them.
   later" — version control remembers.
 - **Handle errors on real paths; fail loud.** Validate input at trust
   boundaries. Don't swallow exceptions or mask failures with silent defaults.
-- **Declarative over imperative** where it applies.
-- **Immutability by default.**

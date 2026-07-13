@@ -2,8 +2,8 @@
 
 > [!CAUTION]
 > Work in progress! Use at your own risk.
-> The loop is currently heavily unbalanced and **wastes a ton of tokens** for simple tasks.
-> Gets them done though...😅
+> The loop is currently heavily unbalanced and **wastes a ton of tokens** for simple tasks. Like $3 to change a lightbulb... :scream:
+> Gets them it though...😅
 
 > Installs as `codesquad`, driven by the `squad` command.
 
